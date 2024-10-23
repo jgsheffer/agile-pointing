@@ -84,14 +84,14 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'flex items-center space-x-2 ml-2';
 
-    if (isSubmitted) {
-        controlsDiv.innerHTML = `
-            <button onclick="voteCard('${id}')" class="vote-count bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition dark:bg-blue-900 dark:text-blue-200 theme-transition">
-                👍 ${votes}
-            </button>
-            <button onclick="deleteCard('${id}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">×</button>
-        `;
-    }
+    // if (isSubmitted) {
+    //     controlsDiv.innerHTML = `
+    //         <button onclick="voteCard('${id}')" class="vote-count bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition dark:bg-blue-900 dark:text-blue-200 theme-transition">
+    //             👍 ${votes}
+    //         </button>
+    //         <button onclick="deleteCard('${id}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">×</button>
+    //     `;
+    // }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'flex-grow';
