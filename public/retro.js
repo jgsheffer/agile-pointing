@@ -1,17 +1,18 @@
 // retro.js
 
-// Initialize socket with reconnection options
 const socket = io({
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: Infinity
+    reconnectionAttempts: Infinity,
+    timeout: 10000
 });
 
 // Core variables
 let userName = '';
 let timerInterval;
 let participants = new Set();
+let timer = null;
 
 // Room management
 function generateRoomId() {
@@ -27,7 +28,7 @@ if (!roomId) {
 
 // User name generation
 const animals = [
-    'Panda', 'Tiger', 'Lion', 'Elephant', 'Giraffe', 'Penguin', 'Kangaroo', 'Koala',
+    'Panda','Red Panda', 'Tiger', 'Lion', 'Elephant', 'Giraffe', 'Penguin', 'Kangaroo', 'Koala',
     'Dolphin', 'Zebra', 'Monkey', 'Bear', 'Fox', 'Wolf', 'Owl', 'Eagle', 'Rabbit'
 ];
 
@@ -50,12 +51,126 @@ function copyRoomLink() {
     const roomLink = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
     navigator.clipboard.writeText(roomLink).then(() => {
         const button = document.querySelector('button[onclick="copyRoomLink()"]');
-        const originalText = button.textContent;
-        button.textContent = '✅';
+        const originalIcon = button.textContent;
+        button.textContent = 'check';
         setTimeout(() => {
-            button.textContent = originalText;
+            button.textContent = originalIcon;
         }, 2000);
     });
+}
+
+// PDF Generation
+async function downloadPDF() {
+    const pdfButton = document.querySelector('button[onclick="downloadPDF()"]');
+    const originalContent = pdfButton.innerHTML;
+    pdfButton.innerHTML = '<span class="material-icons">hourglass_top</span>Generating...';
+    
+    try {
+        const contentClone = document.querySelector('#retro-content').cloneNode(true);
+        
+        // Clean up the clone for PDF
+        contentClone.querySelectorAll('button').forEach(button => {
+            if (!button.classList.contains('vote-count')) {
+                button.remove();
+            }
+        });
+        
+        contentClone.querySelectorAll('textarea').forEach(textarea => {
+            const div = document.createElement('div');
+            div.textContent = textarea.value || 'Empty card';
+            div.style.minHeight = '50px';
+            div.style.padding = '8px';
+            textarea.parentNode.replaceChild(div, textarea);
+        });
+
+        const container = document.createElement('div');
+        container.style.background = 'white';
+        container.style.padding = '20px';
+        container.style.color = 'black';
+        container.appendChild(contentClone);
+        document.body.appendChild(container);
+
+        const canvas = await html2canvas(container, {
+            scale: 2,
+            backgroundColor: 'white',
+            useCORS: true,
+            logging: false
+        });
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgWidth = 210;
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        const pageHeight = 297;
+
+        // Add title and metadata
+        pdf.setFontSize(20);
+        pdf.text('Sprint Retrospective', 105, 15, { align: 'center' });
+        pdf.setFontSize(12);
+        pdf.text(`Generated: ${new Date().toLocaleString()}`, 105, 25, { align: 'center' });
+        pdf.text(`Room: ${roomId}`, 105, 32, { align: 'center' });
+
+        // Add content
+        let position = 40;
+        let remainingHeight = imgHeight;
+
+        while (remainingHeight > 0) {
+            pdf.addImage(
+                canvas.toDataURL('image/jpeg', 1.0),
+                'JPEG',
+                0,
+                position,
+                imgWidth,
+                Math.min(remainingHeight, pageHeight - 40)
+            );
+            
+            remainingHeight -= (pageHeight - 40);
+            if (remainingHeight > 0) {
+                pdf.addPage();
+                position = 0;
+            }
+        }
+
+        pdf.save(`Sprint_Retro_${roomId}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+        console.error('PDF generation failed:', error);
+        alert('Failed to generate PDF. Please try again.');
+    } finally {
+        document.body.removeChild(container);
+        pdfButton.innerHTML = originalContent;
+    }
+}
+
+// Timer functionality
+function toggleTimer() {
+    const timerBtn = document.getElementById('timer-btn');
+    const timerDisplay = document.getElementById('timer-display');
+    
+    if (!timer) {
+        let timeLeft = 5 * 60;
+        timerDisplay.classList.remove('hidden');
+        
+        timer = setInterval(() => {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (timeLeft === 0) {
+                clearInterval(timer);
+                timer = null;
+                timerBtn.innerHTML = '<span class="material-icons">timer</span>Start Timer (5:00)';
+                timerDisplay.classList.add('hidden');
+            }
+            timeLeft--;
+        }, 1000);
+        
+        timerBtn.innerHTML = '<span class="material-icons">timer_off</span>Stop Timer';
+    } else {
+        clearInterval(timer);
+        timer = null;
+        timerBtn.innerHTML = '<span class="material-icons">timer</span>Start Timer (5:00)';
+        timerDisplay.classList.add('hidden');
+    }
 }
 
 // Participant management
@@ -69,11 +184,11 @@ function updateParticipantsList() {
 // Card management
 function createCard(content, id, votes = 0, author = userName, groupedCards = [], isSubmitted = false) {
     const card = document.createElement('div');
-    card.className = 'card bg-white border rounded-lg p-4 shadow hover:shadow-md dark:bg-gray-700 dark:border-gray-600 theme-transition';
+    card.className = 'card p-4';
     card.dataset.id = id;
     
     const textarea = document.createElement('textarea');
-    textarea.className = 'w-full resize-none border-none focus:ring-0 mb-2 dark:bg-gray-700 dark:text-white theme-transition';
+    textarea.className = 'w-full border-none focus:ring-0 mb-2';
     textarea.value = content;
     textarea.placeholder = 'Enter your thoughts here...';
     textarea.disabled = isSubmitted;
@@ -84,14 +199,16 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'flex items-center space-x-2 ml-2';
 
-    // if (isSubmitted) {
-    //     controlsDiv.innerHTML = `
-    //         <button onclick="voteCard('${id}')" class="vote-count bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition dark:bg-blue-900 dark:text-blue-200 theme-transition">
-    //             👍 ${votes}
-    //         </button>
-    //         <button onclick="deleteCard('${id}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">×</button>
-    //     `;
-    // }
+    if (isSubmitted) {
+        controlsDiv.innerHTML = `
+            <button onclick="voteCard('${id}')" class="vote-count px-2 py-1 rounded">
+                👍 ${votes}
+            </button>
+            <button onclick="deleteCard('${id}')" class="material-icons text-red-400 hover:text-red-300">
+                delete
+            </button>
+        `;
+    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'flex-grow';
@@ -107,8 +224,8 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
         submitBtnContainer.className = 'flex justify-end mt-2';
         
         const submitBtn = document.createElement('button');
-        submitBtn.className = 'submit-button';
-        submitBtn.textContent = 'Submit';
+        submitBtn.className = 'submit-button px-4 py-2 rounded';
+        submitBtn.innerHTML = '<span class="material-icons">send</span>Submit';
         submitBtn.onclick = () => submitCard(id, textarea.value, card);
         
         submitBtnContainer.appendChild(submitBtn);
@@ -116,7 +233,7 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
     }
 
     const authorDiv = document.createElement('div');
-    authorDiv.className = 'text-sm text-gray-500 mt-2 dark:text-gray-400 theme-transition';
+    authorDiv.className = 'text-sm opacity-60 mt-2';
     authorDiv.textContent = `Added by ${author}`;
     card.appendChild(authorDiv);
 
@@ -125,7 +242,7 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
         groupedDiv.className = 'grouped-cards mt-2';
         groupedCards.forEach(groupedCard => {
             const groupedCardDiv = document.createElement('div');
-            groupedCardDiv.className = 'text-sm text-gray-600 pl-2 border-l-2 border-gray-200 mt-2 dark:text-gray-300 dark:border-gray-600 theme-transition';
+            groupedCardDiv.className = 'text-sm opacity-80 pl-2 border-l-2 border-purple-500 mt-2';
             groupedCardDiv.textContent = `${groupedCard.content} (by ${groupedCard.author})`;
             groupedDiv.appendChild(groupedCardDiv);
         });
@@ -175,10 +292,12 @@ function submitCard(cardId, content, cardElement) {
     }
     
     controlsDiv.innerHTML = `
-        <button onclick="voteCard('${cardId}')" class="vote-count bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition dark:bg-blue-900 dark:text-blue-200 theme-transition">
+        <button onclick="voteCard('${cardId}')" class="vote-count px-2 py-1 rounded">
             👍 0
         </button>
-        <button onclick="deleteCard('${cardId}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">×</button>
+        <button onclick="deleteCard('${cardId}')" class="material-icons text-red-400 hover:text-red-300">
+            delete
+        </button>
     `;
     
     socket.emit('submitCard', {
@@ -189,7 +308,9 @@ function submitCard(cardId, content, cardElement) {
 }
 
 function deleteCard(cardId) {
-    socket.emit('deleteCard', { room: roomId, cardId });
+    if (confirm('Are you sure you want to delete this card?')) {
+        socket.emit('deleteCard', { room: roomId, cardId });
+    }
 }
 
 function voteCard(cardId) {
@@ -208,22 +329,12 @@ function autoResize(textarea) {
     textarea.style.height = Math.max(60, textarea.scrollHeight) + 'px';
 }
 
-// Theme management
-function toggleTheme() {
-    const html = document.documentElement;
-    const themeToggle = document.querySelector('.theme-toggle');
-    const isDark = html.classList.toggle('dark');
-    themeToggle.classList.toggle('dark');
-    themeToggle.classList.toggle('light');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-}
-
 // Socket event handlers
 socket.on('connect', () => {
     console.log('Connected to server, joining room:', roomId);
-    updateRoomDisplay();
     socket.emit('joinRetro', { room: roomId, name: userName });
     document.getElementById('loading-overlay').style.display = 'none';
+    updateRoomDisplay();
 });
 
 socket.on('disconnect', () => {
@@ -232,13 +343,18 @@ socket.on('disconnect', () => {
     document.getElementById('loading-overlay').textContent = 'Reconnecting...';
 });
 
-socket.on('initialCards', ({ cards }) => {
-    console.log('Received initial cards:', cards.length);
-    updateCardsDisplay(cards);
+socket.on('reconnect', (attemptNumber) => {
+    console.log('Reconnected after', attemptNumber, 'attempts');
+    socket.emit('joinRetro', { room: roomId, name: userName });
 });
 
-socket.on('updateCards', ({ cards }) => {
-    console.log('Received card update:', cards.length);
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    document.getElementById('loading-overlay').textContent = 'Connection error. Please refresh the page.';
+});
+
+socket.on('loadCards', ({ cards }) => {
+    console.log('Received cards update:', cards.length);
     updateCardsDisplay(cards);
 });
 
@@ -255,13 +371,6 @@ socket.on('participantLeft', ({ name }) => {
 socket.on('updateParticipants', ({ participants: participantsList }) => {
     participants = new Set(participantsList);
     updateParticipantsList();
-});
-
-socket.on('retroReset', () => {
-    ['went-well', 'improve', 'action-items'].forEach(columnId => {
-        const column = document.getElementById(columnId);
-        column.innerHTML = '';
-    });
 });
 
 // Card display update
@@ -295,7 +404,7 @@ const drake = dragula([
 ], {
     moves: function (el, container, handle) {
         return !handle.classList.contains('vote-count') && 
-               !handle.classList.contains('text-red-500') &&
+               !handle.classList.contains('material-icons') &&
                el.querySelector('textarea').disabled;
     }
 }).on('drop', function (el, target, source) {
@@ -304,35 +413,4 @@ const drake = dragula([
         cardId: el.dataset.id,
         newColumn: target.id
     });
-});
-
-// Initialize theme
-if (localStorage.getItem('theme') === 'dark' || 
-    (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark');
-    document.querySelector('.theme-toggle').classList.add('dark');
-    document.querySelector('.theme-toggle').classList.remove('light');
-}
-
-// Handle page visibility
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-        socket.emit('requestUpdate', { room: roomId });
-    }
-});
-
-// Handle beforeunload
-window.addEventListener('beforeunload', () => {
-    socket.emit('leaveRetro', { room: roomId, name: userName });
-});
-
-// Error handling
-socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    document.getElementById('loading-overlay').textContent = 'Connection error. Retrying...';
-});
-
-socket.on('reconnect', (attemptNumber) => {
-    console.log('Reconnected after', attemptNumber, 'attempts');
-    socket.emit('joinRetro', { room: roomId, name: userName });
 });
