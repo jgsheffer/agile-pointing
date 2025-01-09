@@ -98,12 +98,12 @@
       }
 
       .md-btn-primary {
-        background-color: #bb86fc;
+        background-color: #90caf9;
         color: #000;
       }
 
       .md-btn-primary:hover {
-        background-color: #3700b3;
+        background-color: #42a5f5;
         color: #fff;
       }
 
@@ -226,12 +226,12 @@
             </div>
           </div>
           <div class="flex items-center space-x-4">
-            <a
-              href="/retro.html"
-              class="md-btn md-btn-primary px-4 py-2 rounded"
+            <button
+              onclick="leaveRoom()"
+              class="md-btn md-btn-danger px-4 py-2 rounded"
             >
-              Sprint Retro
-            </a>
+              <span class="material-icons mr-2">exit_to_app</span>Leave Room
+            </button>
           </div>
         </div>
       </div>
@@ -280,7 +280,15 @@
 
         <!-- Voting Area -->
         <div id="voting-area" class="hidden">
-          <div class="card p-6 mb-6">
+          <div class="card p-6 mb-6 relative">
+            <!-- Add relative positioning -->
+            <button
+              onclick="resetVotes()"
+              class="reset-button md-btn px-4 py-2 rounded"
+            >
+              <span class="material-icons mr-2">refresh</span>Reset
+            </button>
+
             <div
               id="voting-buttons"
               class="flex justify-center flex-wrap gap-4 mb-6"
@@ -322,6 +330,7 @@
                 13
               </button>
             </div>
+
             <div class="flex justify-center space-x-4">
               <button
                 onclick="revealVotes()"
@@ -329,21 +338,8 @@
               >
                 <span class="material-icons mr-2">visibility</span>Reveal Votes
               </button>
-              <button
-                onclick="resetVotes()"
-                class="md-btn md-btn-primary px-4 py-2 rounded"
-              >
-                <span class="material-icons mr-2">refresh</span>Reset Votes
-              </button>
-              <button
-                onclick="leaveRoom()"
-                class="md-btn md-btn-danger px-4 py-2 rounded"
-              >
-                <span class="material-icons mr-2">exit_to_app</span>Leave Room
-              </button>
             </div>
           </div>
-
           <div id="results" class="card p-6 mb-6 text-center hidden">
             <p class="text-xl">Average Vote: <span id="average-vote"></span></p>
             <div id="consensus" class="rainbow-text hidden">CONSENSUS!</div>
