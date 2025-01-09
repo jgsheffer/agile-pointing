@@ -59,15 +59,19 @@ function joinRoom() {
   const name = document.getElementById('name').value;
   const room = document.getElementById('room').value;
   if (name && room && selectedEmoji) {
+    localStorage.setItem('userName', name);
+    localStorage.setItem('userAvatar', selectedEmoji);
     currentRoom = room;
-    socket.emit('joinRoom', { room, name, avatar: selectedEmoji, sessionId });
+
+    socket.emit('joinRoom', {
+      room,
+      name,
+      avatar: selectedEmoji,
+      sessionId: localStorage.getItem('sessionId'),
+    });
     document.getElementById('join-form').classList.add('hidden');
     document.getElementById('voting-area').classList.remove('hidden');
     updateRoomHeader(room, true);
-    localStorage.setItem(
-      'pokerSession',
-      JSON.stringify({ name, room, avatar: selectedEmoji })
-    );
   } else {
     alert('Please enter your name, room ID, and select an avatar.');
   }
@@ -86,6 +90,20 @@ function leaveRoom() {
     localStorage.removeItem('pokerSession');
   }
 }
+
+window.addEventListener('load', () => {
+  const sessionId = localStorage.getItem('sessionId');
+  const room = new URLSearchParams(window.location.search).get('room');
+
+  if (sessionId && room) {
+    socket.emit('joinRoom', {
+      room,
+      sessionId,
+      name: localStorage.getItem('userName'),
+      avatar: localStorage.getItem('userAvatar'),
+    });
+  }
+});
 // Voting functionality
 let currentVote = null;
 
