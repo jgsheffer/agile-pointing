@@ -1,258 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OhayoDev Pointing Poker</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
     <style>
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #121212;
-            color: rgba(255, 255, 255, 0.87);
-        }
-        
-        .card {
-            background-color: #1e1e1e;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px -1px rgba(0,0,0,0.2), 0 4px 5px 0 rgba(0,0,0,0.14), 0 1px 10px 0 rgba(0,0,0,0.12);
-        }
+      body {
+        font-family: 'Roboto', sans-serif;
+        background-color: #121212;
+        color: rgba(255, 255, 255, 0.87);
+      }
 
-        .header-card {
-            background-color: #1e1e1e;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-        }
+      .card {
+        background-color: #1e1e1e;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2),
+          0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
+      }
 
-        .emoji-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-        }
+      .header-card {
+        background-color: #1e1e1e;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
 
-        .emoji-option {
-            font-size: 24px;
-            cursor: pointer;
-            transition: background-color 0.3s, box-shadow 0.3s;
-            background-color: #2c2c2c;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+      .emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+      }
 
-        .emoji-option:hover {
-            background-color: #3700B3;
-            box-shadow: 0 3px 5px -1px rgba(0,0,0,0.2), 0 6px 10px 0 rgba(0,0,0,0.14), 0 1px 18px 0 rgba(0,0,0,0.12);
-        }
+      .emoji-option {
+        font-size: 24px;
+        cursor: pointer;
+        transition: background-color 0.3s, box-shadow 0.3s;
+        background-color: #2c2c2c;
+        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-        .vote-button {
-            width: 56px;
-            height: 56px;
-            font-size: 18px;
-            transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
-            box-shadow: 0 3px 5px -1px rgba(0,0,0,0.2), 0 6px 10px 0 rgba(0,0,0,0.14), 0 1px 18px 0 rgba(0,0,0,0.12);
-        }
+      .emoji-option:hover {
+        background-color: #3700b3;
+        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2),
+          0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
+      }
 
-        .vote-button:hover {
-            box-shadow: 0 5px 5px -3px rgba(0,0,0,0.2), 0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12);
-            transform: translateY(-2px);
-        }
+      .vote-button {
+        width: 56px;
+        height: 56px;
+        font-size: 18px;
+        transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
+        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2),
+          0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
+      }
 
-        .vote-button.selected {
-            background-color: #3700B3 !important;
-            transform: scale(1.1);
-        }
+      .vote-button:hover {
+        box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+          0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+      }
 
-        .participant {
-            transition: transform 0.3s;
-        }
+      .vote-button.selected {
+        background-color: #3700b3 !important;
+        transform: scale(1.1);
+      }
 
-        .participant.voted {
-            transform: scale(1.02);
-        }
+      .participant {
+        transition: transform 0.3s;
+      }
 
-        .md-btn {
-            text-transform: uppercase;
-            font-weight: 500;
-            letter-spacing: 1.25px;
-            transition: background-color 0.3s, box-shadow 0.3s;
-        }
+      .participant.voted {
+        transform: scale(1.02);
+      }
 
-        .md-btn-primary {
-            background-color: #BB86FC;
-            color: #000;
-        }
+      .md-btn {
+        text-transform: uppercase;
+        font-weight: 500;
+        letter-spacing: 1.25px;
+        transition: background-color 0.3s, box-shadow 0.3s;
+      }
 
-        .md-btn-primary:hover {
-            background-color: #3700B3;
-            color: #fff;
-        }
+      .md-btn-primary {
+        background-color: #bb86fc;
+        color: #000;
+      }
 
-        .md-btn-secondary {
-            background-color: #03DAC6;
-            color: #000;
-        }
+      .md-btn-primary:hover {
+        background-color: #3700b3;
+        color: #fff;
+      }
 
-        .md-btn-secondary:hover {
-            background-color: #018786;
-            color: #fff;
-        }
+      .md-btn-secondary {
+        background-color: #03dac6;
+        color: #000;
+      }
 
-        .md-btn-danger {
-            background-color: #CF6679;
-            color: #000;
-        }
+      .md-btn-secondary:hover {
+        background-color: #018786;
+        color: #fff;
+      }
 
-        .md-btn-danger:hover {
-            background-color: #A00037;
-            color: #fff;
-        }
+      .md-btn-danger {
+        background-color: #cf6679;
+        color: #000;
+      }
 
-        .input-md {
-            background-color: #2c2c2c;
-            color: rgba(255, 255, 255, 0.87);
-            border: none;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.42);
-            transition: border-bottom-color 0.3s;
-        }
+      .md-btn-danger:hover {
+        background-color: #a00037;
+        color: #fff;
+      }
 
-        .input-md:focus {
-            border-bottom-color: #BB86FC;
-            outline: none;
-        }
+      .input-md {
+        background-color: #2c2c2c;
+        color: rgba(255, 255, 255, 0.87);
+        border: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+        transition: border-bottom-color 0.3s;
+      }
 
-        .input-md::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
+      .input-md:focus {
+        border-bottom-color: #bb86fc;
+        outline: none;
+      }
 
-        @keyframes rainbow {
-            0% { color: violet; }
-            14% { color: indigo; }
-            28% { color: blue; }
-            42% { color: green; }
-            57% { color: yellow; }
-            71% { color: orange; }
-            85% { color: red; }
-            100% { color: violet; }
-        }
+      .input-md::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+      }
 
-        .rainbow-text {
-            animation: rainbow 5s linear infinite;
-            font-size: 48px;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 20px;
+      @keyframes rainbow {
+        0% {
+          color: violet;
         }
+        14% {
+          color: indigo;
+        }
+        28% {
+          color: blue;
+        }
+        42% {
+          color: green;
+        }
+        57% {
+          color: yellow;
+        }
+        71% {
+          color: orange;
+        }
+        85% {
+          color: red;
+        }
+        100% {
+          color: violet;
+        }
+      }
 
-        #giphy-image {
-            max-width: 100%;
-            height: auto;
-            margin-top: 20px;
-            border-radius: 4px;
-        }
+      .rainbow-text {
+        animation: rainbow 5s linear infinite;
+        font-size: 48px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 20px;
+      }
 
-        .room-info {
-            background-color: #2c2c2c;
-            border-radius: 4px;
-            padding: 4px 12px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
+      #giphy-image {
+        max-width: 100%;
+        height: auto;
+        margin-top: 20px;
+        border-radius: 4px;
+      }
 
-        .copy-button {
-            cursor: pointer;
-            transition: opacity 0.3s;
-        }
+      .room-info {
+        background-color: #2c2c2c;
+        border-radius: 4px;
+        padding: 4px 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-        .copy-button:hover {
-            opacity: 0.8;
-        }
+      .copy-button {
+        cursor: pointer;
+        transition: opacity 0.3s;
+      }
+
+      .copy-button:hover {
+        opacity: 0.8;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <!-- New Header -->
     <nav class="header-card fixed top-0 left-0 right-0 z-50">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center space-x-4">
-                    <span class="text-xl font-bold">OhayoDev Pointing Poker</span>
-                    <div id="header-room-info" class="room-info hidden">
-                        <span class="text-sm text-gray-300">Room:</span>
-                        <code id="header-room-id" class="text-sm font-mono text-purple-400"></code>
-                        <span class="material-icons copy-button text-gray-400 text-sm" onclick="copyRoomLink()">content_copy</span>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/retro.html" class="md-btn md-btn-primary px-4 py-2 rounded">
-                        Sprint Retro
-                    </a>
-                </div>
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="flex justify-between h-16 items-center">
+          <div class="flex items-center space-x-4">
+            <span class="text-xl font-bold">OhayoDev Pointing Poker</span>
+            <div id="header-room-info" class="room-info hidden">
+              <span class="text-sm text-gray-300">Room:</span>
+              <code
+                id="header-room-id"
+                class="text-sm font-mono text-purple-400"
+              ></code>
+              <span
+                class="material-icons copy-button text-gray-400 text-sm"
+                onclick="copyRoomLink()"
+                >content_copy</span
+              >
             </div>
+          </div>
+          <div class="flex items-center space-x-4">
+            <a
+              href="/retro.html"
+              class="md-btn md-btn-primary px-4 py-2 rounded"
+            >
+              Sprint Retro
+            </a>
+          </div>
         </div>
+      </div>
     </nav>
 
     <div class="min-h-screen pt-16 flex items-center justify-center">
-        <div id="app" class="container mx-auto p-4">
-            <!-- Join Form -->
-            <div id="join-form" class="card p-6 max-w-md mx-auto">
-                <h2 class="text-2xl font-medium mb-6 text-center">Join Pointing Poker</h2>
-                <div class="mb-4">
-                    <input type="text" id="name" placeholder="Your Name" class="w-full p-2 mb-1 input-md">
-                    <div class="h-0.5 w-full bg-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"></div>
-                </div>
-                <div class="mb-4">
-                    <input type="text" id="room" placeholder="Room ID" class="w-full p-2 mb-1 input-md">
-                    <div class="h-0.5 w-full bg-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"></div>
-                </div>
-                <div class="mb-6">
-                    <p class="mb-2 text-sm font-medium">Choose your avatar:</p>
-                    <div id="emoji-grid" class="emoji-grid"></div>
-                </div>
-                <button onclick="joinRoom()" class="w-full md-btn md-btn-primary p-2 rounded">Join Room</button>
-            </div>
-
-            <!-- Voting Area -->
-            <div id="voting-area" class="hidden">
-                <div class="card p-6 mb-6">
-                    <div id="voting-buttons" class="flex justify-center flex-wrap gap-4 mb-6">
-                        <button onclick="vote(1)" class="vote-button md-btn-primary rounded-full">1</button>
-                        <button onclick="vote(2)" class="vote-button md-btn-primary rounded-full">2</button>
-                        <button onclick="vote(3)" class="vote-button md-btn-primary rounded-full">3</button>
-                        <button onclick="vote(5)" class="vote-button md-btn-primary rounded-full">5</button>
-                        <button onclick="vote(8)" class="vote-button md-btn-primary rounded-full">8</button>
-                        <button onclick="vote(13)" class="vote-button md-btn-primary rounded-full">13</button>
-                    </div>
-                    <div class="flex justify-center space-x-4">
-                        <button onclick="revealVotes()" class="md-btn md-btn-primary px-4 py-2 rounded">
-                            <span class="material-icons mr-2">visibility</span>Reveal Votes
-                        </button>
-                        <button onclick="resetVotes()" class="md-btn md-btn-secondary px-4 py-2 rounded">
-                            <span class="material-icons mr-2">refresh</span>Reset Votes
-                        </button>
-                        <button onclick="leaveRoom()" class="md-btn md-btn-danger px-4 py-2 rounded">
-                            <span class="material-icons mr-2">exit_to_app</span>Leave Room
-                        </button>
-                    </div>
-                </div>
-
-                <div id="results" class="card p-6 mb-6 text-center hidden">
-                    <p class="text-xl">Average Vote: <span id="average-vote"></span></p>
-                    <div id="consensus" class="rainbow-text hidden">CONSENSUS!</div>
-                    <img id="giphy-image" class="hidden mx-auto" alt="Let's talk">
-                </div>
-
-                <div id="participants" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
-            </div>
+      <div id="app" class="container mx-auto p-4">
+        <!-- Join Form -->
+        <div id="join-form" class="card p-6 max-w-md mx-auto">
+          <h2 class="text-2xl font-medium mb-6 text-center">
+            Join Pointing Poker
+          </h2>
+          <div class="mb-4">
+            <input
+              type="text"
+              id="name"
+              placeholder="Your Name"
+              class="w-full p-2 mb-1 input-md"
+            />
+            <div
+              class="h-0.5 w-full bg-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"
+            ></div>
+          </div>
+          <div class="mb-4">
+            <input
+              type="text"
+              id="room"
+              placeholder="Room ID"
+              class="w-full p-2 mb-1 input-md"
+            />
+            <div
+              class="h-0.5 w-full bg-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"
+            ></div>
+          </div>
+          <div class="mb-6">
+            <p class="mb-2 text-sm font-medium">Choose your avatar:</p>
+            <div id="emoji-grid" class="emoji-grid"></div>
+          </div>
+          <button
+            onclick="joinRoom()"
+            class="w-full md-btn md-btn-primary p-2 rounded"
+          >
+            Join Room
+          </button>
         </div>
+
+        <!-- Voting Area -->
+        <div id="voting-area" class="hidden">
+          <div class="card p-6 mb-6">
+            <div
+              id="voting-buttons"
+              class="flex justify-center flex-wrap gap-4 mb-6"
+            >
+              <button
+                onclick="vote(1)"
+                class="vote-button md-btn-primary rounded-full"
+              >
+                1
+              </button>
+              <button
+                onclick="vote(2)"
+                class="vote-button md-btn-primary rounded-full"
+              >
+                2
+              </button>
+              <button
+                onclick="vote(3)"
+                class="vote-button md-btn-primary rounded-full"
+              >
+                3
+              </button>
+              <button
+                onclick="vote(5)"
+                class="vote-button md-btn-primary rounded-full"
+              >
+                5
+              </button>
+              <button
+                onclick="vote(8)"
+                class="vote-button md-btn-primary rounded-full"
+              >
+                8
+              </button>
+              <button
+                onclick="vote(13)"
+                class="vote-button md-btn-primary rounded-full"
+              >
+                13
+              </button>
+            </div>
+            <div class="flex justify-center space-x-4">
+              <button
+                onclick="revealVotes()"
+                class="md-btn md-btn-secondary px-4 py-2 rounded"
+              >
+                <span class="material-icons mr-2">visibility</span>Reveal Votes
+              </button>
+              <button
+                onclick="resetVotes()"
+                class="md-btn md-btn-primary px-4 py-2 rounded"
+              >
+                <span class="material-icons mr-2">refresh</span>Reset Votes
+              </button>
+              <button
+                onclick="leaveRoom()"
+                class="md-btn md-btn-danger px-4 py-2 rounded"
+              >
+                <span class="material-icons mr-2">exit_to_app</span>Leave Room
+              </button>
+            </div>
+          </div>
+
+          <div id="results" class="card p-6 mb-6 text-center hidden">
+            <p class="text-xl">Average Vote: <span id="average-vote"></span></p>
+            <div id="consensus" class="rainbow-text hidden">CONSENSUS!</div>
+            <img id="giphy-image" class="hidden mx-auto" alt="Let's talk" />
+          </div>
+
+          <div
+            id="participants"
+            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+          ></div>
+        </div>
+      </div>
     </div>
 
     <script src="pointing.js"></script>
-</body>
+  </body>
 </html>
