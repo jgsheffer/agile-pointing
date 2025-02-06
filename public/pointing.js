@@ -10,9 +10,25 @@ const fibonacciSequence = [1, 2, 3, 5, 8, 13];
 const letsTalkGifs = [
   'https://i.giphy.com/tbEjpqYUbeGyZtIcES.webp',
   'https://i.giphy.com/01u3Rw1zQLSylw2Tn9.webp',
+  'https://i.giphy.com/l0HlvtIPzPdt2usKs.webp',
+  'https://i.giphy.com/l0HlKrB02QY0f1mbm.webp',
 ];
 
-// Initial setup
+const celebrationGifs = [
+  'https://i.giphy.com/3o7TKDxSkF9iGiCJri.webp',
+  'https://i.giphy.com/g9582DNuQppxC.webp',
+  'https://i.giphy.com/YTbZzCkRQCEJa.webp',
+  'https://i.giphy.com/11sBLVxNs7v6WA.webp',
+  'https://i.giphy.com/26tOZ42Mg6pbTUPHW.webp',
+  'https://i.giphy.com/26u4lOMA8JKSnL9Uk.webp',
+  'https://i.giphy.com/l0MYt5jPR6QX5pnqM.webp',
+  'https://i.giphy.com/3oz8xRF0v9WMAUVLNK.webp',
+  'https://i.giphy.com/26gsspfbt1HfVQ9va.webp',
+  'https://i.giphy.com/l0MYJnJQ4EiYLxvQ4.webp',
+  'https://i.giphy.com/26u4cqiYI30juCOGY.webp',
+  'https://i.giphy.com/26tPplGWjN0xLybiU.webp',
+  'https://i.giphy.com/3o7TKNcbfKa8f2Zkuk.webp',
+]; // Initial setup
 function populateEmojiGrid() {
   const emojiGrid = document.getElementById('emoji-grid');
   emojis.forEach((emoji) => {
@@ -148,6 +164,7 @@ function updateParticipantList(participants, revealed = false) {
 
 function calculateAndDisplayResults(participants) {
   const votes = participants.map((p) => p.vote).filter((v) => v !== null);
+
   const average =
     votes.length > 0 ? votes.reduce((a, b) => a + b, 0) / votes.length : 0;
 
@@ -162,22 +179,27 @@ function calculateAndDisplayResults(participants) {
       spread: 70,
       origin: { y: 0.6 },
     });
+    // Show celebration GIF
+    const randomIndex = Math.floor(Math.random() * celebrationGifs.length);
+    const gifUrl = celebrationGifs[randomIndex];
+    const giphyImage = document.getElementById('giphy-image');
+    giphyImage.src = gifUrl;
+    giphyImage.classList.remove('hidden');
   } else {
     document.getElementById('consensus').classList.add('hidden');
-  }
+    // Check for large vote spread
+    const minVote = Math.min(...votes);
+    const maxVote = Math.max(...votes);
+    const minIndex = fibonacciSequence.indexOf(minVote);
+    const maxIndex = fibonacciSequence.indexOf(maxVote);
 
-  const minVote = Math.min(...votes);
-  const maxVote = Math.max(...votes);
-  const minIndex = fibonacciSequence.indexOf(minVote);
-  const maxIndex = fibonacciSequence.indexOf(maxVote);
-
-  if (maxIndex - minIndex > 2) {
-    displayRandomGif();
-  } else {
-    document.getElementById('giphy-image').classList.add('hidden');
+    if (maxIndex - minIndex > 2) {
+      displayRandomGif();
+    } else {
+      document.getElementById('giphy-image').classList.add('hidden');
+    }
   }
 }
-
 function displayRandomGif() {
   const randomIndex = Math.floor(Math.random() * letsTalkGifs.length);
   const gifUrl = letsTalkGifs[randomIndex];
