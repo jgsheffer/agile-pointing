@@ -46,15 +46,26 @@ io.on('connection', (socket) => {
   console.log('New client connected', socket.id);
   let currentRoom = null;
   let currentUser = null;
+  let socketSessionId = null;
 
   // Pointing Poker handlers
   socket.on('joinRoom', ({ room, name, avatar, sessionId }) => {
     let userSessionId = sessionId;
     if (!userSessionId || !sessions.has(userSessionId)) {
       userSessionId = uuidv4();
+    } else {
+      // Reconnection - reuse existing session
+      const existingSession = sessions.get(userSessionId);
+      if (existingSession.room === room) {
+        // Update the socket ID for the existing session
+        existingSession.socketId = socket.id;
+        existingSession.disconnectedAt = null;
+        sessions.set(userSessionId, existingSession);
+      }
     }
 
-    sessions.set(userSessionId, { room, name, avatar });
+    sessions.set(userSessionId, { room, name, avatar, socketId: socket.id });
+    socketSessionId = userSessionId;
     socket.join(room);
 
     if (!pointingRooms.has(room)) {
@@ -212,10 +223,28 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Client disconnected', socket.id);
 
-    // Handle pointing poker disconnections
-    sessions.forEach((session, sessionId) => {
+    // Mark session as disconnected but don't remove from room
+    if (socketSessionId && sessions.has(socketSessionId)) {
+      const session = sessions.get(socketSessionId);
+      session.disconnectedAt = Date.now();
+      session.socketId = null;
+      sessions.set(socketSessionId, session);
+      console.log(`Session ${socketSessionId} marked as disconnected`);
+    }
+  });
+});
+
+// Clean up inactive rooms and sessions periodically
+setInterval(() => {
+  const now = Date.now();
+  const INACTIVE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
+  const DISCONNECTED_THRESHOLD = 30 * 60 * 1000; // 30 minutes
+
+  // Clean up disconnected sessions
+  sessions.forEach((session, sessionId) => {
+    if (session.disconnectedAt && (now - session.disconnectedAt) > DISCONNECTED_THRESHOLD) {
       const room = session.room;
-      if (pointingRooms.has(room) && pointingRooms.get(room).has(sessionId)) {
+      if (pointingRooms.has(room)) {
         pointingRooms.get(room).delete(sessionId);
         io.to(room).emit(
           'updateParticipants',
@@ -225,27 +254,10 @@ io.on('connection', (socket) => {
           pointingRooms.delete(room);
         }
       }
-    });
-
-    // Handle retro disconnections
-    if (currentRoom && currentUser) {
-      const roomData = retroRooms.get(currentRoom);
-      if (roomData) {
-        roomData.participants.delete(currentUser);
-        io.to(currentRoom).emit('participantLeft', { name: currentUser });
-        io.to(currentRoom).emit('updateParticipants', {
-          participants: Array.from(roomData.participants),
-        });
-        logRoomState(currentRoom, 'disconnect');
-      }
+      sessions.delete(sessionId);
+      console.log(`Cleaned up inactive session ${sessionId}`);
     }
   });
-});
-
-// Clean up inactive rooms periodically
-setInterval(() => {
-  const now = Date.now();
-  const INACTIVE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
 
   retroRooms.forEach((room, roomId) => {
     if (

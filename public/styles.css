@@ -261,3 +261,7 @@ html.dark .submit-button:hover {
 .reset-button:hover {
     background-color: rgba(96, 165, 250, 0.1);
 }
+
+#access-code-input {
+    color: #000000;
+}
