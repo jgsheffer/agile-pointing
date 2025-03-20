@@ -14,9 +14,12 @@ function checkAccessCode() {
   // Show access form, hide main content
   document.getElementById('access-form').style.display = 'block';
   document.getElementById('main-content').style.display = 'none';
-  // Add this line to set the text color
-  document.getElementById('access-code-input').style.color = '#000000';
+  // Change the text color to white
+  document.getElementById('access-code-input').style.color = '#FFFFFF';
+  // Ensure input displays as plain text, not password
+  document.getElementById('access-code-input').type = 'text';
 }
+
 function submitAccessCode() {
   const accessCode = document.getElementById('access-code-input').value;
   if (accessCode === 'Agile25!') {
@@ -36,5 +39,21 @@ function submitAccessCode() {
   }
 }
 
-// Check access code when page loads
-document.addEventListener('DOMContentLoaded', checkAccessCode);
+// Add event listener for Enter key on the input field
+function addEnterKeyListener() {
+  const inputField = document.getElementById('access-code-input');
+  if (inputField) {
+    inputField.addEventListener('keypress', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submitAccessCode();
+      }
+    });
+  }
+}
+
+// Check access code and set up event listeners when page loads
+document.addEventListener('DOMContentLoaded', function () {
+  checkAccessCode();
+  addEnterKeyListener();
+});
