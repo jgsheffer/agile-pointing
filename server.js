@@ -9,6 +9,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// Add middleware to parse JSON bodies
+app.use(express.json());
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Data stores
@@ -291,10 +294,21 @@ app.get('/:room', (req, res) => {
 });
 
 app.post('/validate-access', (req, res) => {
-  const { accessCode } = req.body;
-  if (accessCode === process.env.ACCESS_CODE) {
-    res.json({ valid: true });
-  } else {
-    res.json({ valid: false });
+  try {
+    const { accessCode } = req.body;
+
+    // Add some logging to debug
+    console.log('Received access code validation request');
+    console.log('Expected:', process.env.ACCESS_CODE);
+    console.log('Received:', accessCode);
+
+    if (accessCode === process.env.ACCESS_CODE) {
+      res.json({ valid: true });
+    } else {
+      res.json({ valid: false });
+    }
+  } catch (error) {
+    console.error('Error in validate-access endpoint:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
