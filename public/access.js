@@ -22,7 +22,7 @@ function checkAccessCode() {
 
 function submitAccessCode() {
   const accessCode = document.getElementById('access-code-input').value;
-  if (accessCode === 'Agile25!') {
+  if (accessCode === process.env.ACCESS_CODE) {
     // Set cookie that expires in 365 days
     const d = new Date();
     d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
