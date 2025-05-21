@@ -22,21 +22,36 @@ function checkAccessCode() {
 
 function submitAccessCode() {
   const accessCode = document.getElementById('access-code-input').value;
-  if (accessCode === process.env.ACCESS_CODE) {
-    // Set cookie that expires in 365 days
-    const d = new Date();
-    d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
-    document.cookie = `accessCode=true; expires=${d.toUTCString()}; path=/`;
 
-    // Show main content
-    document.getElementById('access-form').style.display = 'none';
-    document.getElementById('main-content').style.display = 'block';
+  fetch('/validate-access', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ accessCode }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.valid) {
+        // Set cookie that expires in 365 days
+        const d = new Date();
+        d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
+        document.cookie = `accessCode=true; expires=${d.toUTCString()}; path=/`;
 
-    // Clear input
-    document.getElementById('access-code-input').value = '';
-  } else {
-    alert('Invalid access code. Please try again.');
-  }
+        // Show main content
+        document.getElementById('access-form').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+
+        // Clear input
+        document.getElementById('access-code-input').value = '';
+      } else {
+        alert('Invalid access code. Please try again.');
+      }
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+      alert('An error occurred. Please try again.');
+    });
 }
 
 // Add event listener for Enter key on the input field

@@ -242,7 +242,10 @@ setInterval(() => {
 
   // Clean up disconnected sessions
   sessions.forEach((session, sessionId) => {
-    if (session.disconnectedAt && (now - session.disconnectedAt) > DISCONNECTED_THRESHOLD) {
+    if (
+      session.disconnectedAt &&
+      now - session.disconnectedAt > DISCONNECTED_THRESHOLD
+    ) {
       const room = session.room;
       if (pointingRooms.has(room)) {
         pointingRooms.get(room).delete(sessionId);
@@ -285,4 +288,13 @@ server.listen(PORT, () => {
 // Add near the top with other Express middleware
 app.get('/:room', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.post('/validate-access', (req, res) => {
+  const { accessCode } = req.body;
+  if (accessCode === process.env.ACCESS_CODE) {
+    res.json({ valid: true });
+  } else {
+    res.json({ valid: false });
+  }
 });
