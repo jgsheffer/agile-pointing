@@ -109,19 +109,100 @@ function leaveRoom() {
 let currentVote = null;
 
 function vote(value) {
+  const previousVote = currentVote;
   currentVote = value;
 
-  // Update UI to show selected vote
+  // Update UI to show selected vote with enhanced animations
   document.querySelectorAll('.vote-button').forEach((button) => {
     button.classList.remove('selected');
-
+    button.style.transform = 'scale(1)';
+    
+    const buttonValue = button.textContent.trim();
     if (
-      button.textContent == value ||
-      (typeof value === 'number' && parseInt(button.textContent) === value)
+      buttonValue == value ||
+      (typeof value === 'number' && parseInt(buttonValue) === value)
     ) {
       button.classList.add('selected');
+      
+      // Add pop effect
+      button.style.transform = 'scale(1.15)';
+      setTimeout(() => {
+        button.style.transform = 'scale(1.1)';
+      }, 200);
+
+      // Add ripple effect
+      const ripple = document.createElement('div');
+      ripple.className = 'absolute inset-0 bg-white rounded-xl';
+      ripple.style.animation = 'ripple 0.6s linear';
+      button.appendChild(ripple);
+      
+      setTimeout(() => ripple.remove(), 700);
+
+      // Add micro-confetti burst from the button
+      const rect = button.getBoundingClientRect();
+      const buttonCenterX = (rect.left + rect.right) / 2;
+      const buttonCenterY = rect.top;
+      
+      confetti({
+        particleCount: 20,
+        spread: 30,
+        startVelocity: 20,
+        origin: {
+          x: buttonCenterX / window.innerWidth,
+          y: buttonCenterY / window.innerHeight
+        },
+        colors: ['#60A5FA', '#3B82F6', '#2563EB'],
+        shapes: ['circle'],
+        scalar: 0.75
+      });
     }
   });
+
+  // Add voting sound effect
+  const audio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+  audio.volume = 0.2;
+  audio.play();
+
+  // If this is a new vote (not just deselecting), add some particle effects
+  if (previousVote !== value) {
+    const buttons = document.getElementById('voting-buttons');
+    const rect = buttons.getBoundingClientRect();
+    const centerX = (rect.left + rect.right) / 2;
+    const centerY = (rect.top + rect.bottom) / 2;
+
+    // Create floating number particles
+    for (let i = 0; i < 3; i++) {
+      const particle = document.createElement('div');
+      particle.textContent = value;
+      particle.className = 'absolute text-2xl font-bold text-blue-400 pointer-events-none';
+      particle.style.left = `${centerX}px`;
+      particle.style.top = `${centerY}px`;
+      particle.style.transform = 'scale(0)';
+      particle.style.opacity = '0';
+      document.body.appendChild(particle);
+
+      // Random direction for each particle
+      const angle = (Math.random() * Math.PI * 2);
+      const distance = 100 + Math.random() * 50;
+      const destinationX = centerX + Math.cos(angle) * distance;
+      const destinationY = centerY + Math.sin(angle) * distance;
+
+      // Animate the particle
+      requestAnimationFrame(() => {
+        particle.style.transition = 'all 1s cubic-bezier(0.4, 0, 0.2, 1)';
+        particle.style.transform = 'scale(1)';
+        particle.style.opacity = '1';
+        particle.style.left = `${destinationX}px`;
+        particle.style.top = `${destinationY}px`;
+      });
+
+      // Remove the particle after animation
+      setTimeout(() => {
+        particle.style.opacity = '0';
+        setTimeout(() => particle.remove(), 1000);
+      }, 500);
+    }
+  }
 
   socket.emit('vote', { room: currentRoom, vote: value, sessionId });
 }
@@ -146,24 +227,46 @@ function updateParticipantList(participants, revealed = false) {
   participantsDiv.innerHTML = '';
   participants.forEach((p) => {
     const div = document.createElement('div');
-    div.className = 'participant card p-4 flex items-center space-x-2';
+    div.className = 'participant modern-card p-6 flex items-center space-x-4 transform transition-all duration-300 hover:scale-105';
+    
+    // Add a random animation delay for a staggered effect
+    const delay = Math.random() * 0.5;
+    div.style.animationDelay = `${delay}s`;
+    
+    const voteStatus = p.vote 
+      ? revealed 
+        ? `<span class="text-2xl font-bold gradient-text">${p.vote}</span>`
+        : '<span class="material-icons text-green-400 animate-pulse">check_circle</span>'
+      : '<span class="material-icons text-gray-400 float-animation">help_outline</span>';
+
     div.innerHTML = `
-            <span class="text-3xl">${p.avatar}</span>
-            <span class="font-medium">${p.name}</span>
-            <span class="ml-auto ${
-              p.vote ? 'text-green-400' : 'text-gray-500'
-            }">
-                ${
-                  revealed
-                    ? p.vote || '-'
-                    : p.vote
-                    ? '<span class="material-icons">check_circle</span>'
-                    : '<span class="material-icons">help_outline</span>'
-                }
-            </span>
-        `;
-    if (p.vote) div.classList.add('voted');
+      <div class="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300">
+        ${p.avatar}
+      </div>
+      <span class="font-medium text-lg">${p.name}</span>
+      <span class="ml-auto">
+        ${voteStatus}
+      </span>
+    `;
+    
+    if (p.vote) {
+      div.classList.add('voted');
+      // Add a subtle glow effect for voted participants
+      div.style.boxShadow = '0 0 15px rgba(74, 222, 128, 0.2)';
+    }
+    
     participantsDiv.appendChild(div);
+  });
+  
+  // Add entrance animation for new participants
+  const allParticipants = participantsDiv.querySelectorAll('.participant');
+  allParticipants.forEach((participant, index) => {
+    participant.style.opacity = '0';
+    participant.style.transform = 'translateY(20px)';
+    setTimeout(() => {
+      participant.style.opacity = '1';
+      participant.style.transform = 'translateY(0)';
+    }, index * 100);
   });
 }
 
@@ -182,11 +285,39 @@ function calculateAndDisplayResults(participants) {
   const totalVotes = participants.filter((p) => p.vote !== null).length;
   const passVotes = participants.filter((p) => p.vote === 'Pass').length;
 
-  document.getElementById('average-vote').textContent =
-    numericVotes.length > 0 ? average.toFixed(2) : 'N/A';
-
-  // Update results display to show vote breakdown
   const resultsDiv = document.getElementById('results');
+  const averageVoteSpan = document.getElementById('average-vote');
+  
+  // Animate the average vote number counting up
+  const duration = 1500;
+  const steps = 30;
+  const stepDuration = duration / steps;
+  let currentStep = 0;
+  
+  const startValue = 0;
+  const endValue = parseFloat(average.toFixed(2));
+  
+  if (numericVotes.length > 0) {
+    const interval = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps;
+      const currentValue = startValue + (endValue - startValue) * progress;
+      averageVoteSpan.textContent = currentValue.toFixed(2);
+      
+      if (currentStep === steps) {
+        clearInterval(interval);
+        // Add a small bounce animation when done counting
+        averageVoteSpan.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+          averageVoteSpan.style.transform = 'scale(1)';
+        }, 200);
+      }
+    }, stepDuration);
+  } else {
+    averageVoteSpan.textContent = 'N/A';
+  }
+
+  // Update results display to show vote breakdown with animation
   const existingBreakdown = resultsDiv.querySelector('.vote-breakdown');
   if (existingBreakdown) {
     existingBreakdown.remove();
@@ -194,9 +325,16 @@ function calculateAndDisplayResults(participants) {
 
   if (passVotes > 0) {
     const breakdownDiv = document.createElement('div');
-    breakdownDiv.className = 'vote-breakdown text-sm text-gray-400 mt-2';
+    breakdownDiv.className = 'vote-breakdown text-lg text-gray-400 mt-4 opacity-0 transform translate-y-4';
     breakdownDiv.textContent = `${numericVotes.length} numeric votes, ${passVotes} pass votes`;
     resultsDiv.appendChild(breakdownDiv);
+    
+    // Fade in animation
+    setTimeout(() => {
+      breakdownDiv.style.transition = 'all 0.5s ease-out';
+      breakdownDiv.style.opacity = '1';
+      breakdownDiv.style.transform = 'translateY(0)';
+    }, 100);
   }
 
   resultsDiv.classList.remove('hidden');
@@ -204,21 +342,56 @@ function calculateAndDisplayResults(participants) {
   // Check for consensus only among numeric votes
   const allSame =
     numericVotes.length > 0 && numericVotes.every((v) => v === numericVotes[0]);
+  
+  const consensusDiv = document.getElementById('consensus');
+  const giphyImage = document.getElementById('giphy-image');
+  
   if (allSame && numericVotes.length > 1) {
-    document.getElementById('consensus').classList.remove('hidden');
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
-    // Show celebration GIF
+    consensusDiv.classList.remove('hidden');
+    
+    // Enhanced confetti effect
+    const duration = 3 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+    function randomInRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    const interval = setInterval(function() {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+      
+      // Create confetti from multiple origins
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+      });
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+      });
+    }, 250);
+
+    // Show celebration GIF with fade-in effect
     const randomIndex = Math.floor(Math.random() * celebrationGifs.length);
-    const gifUrl = celebrationGifs[randomIndex];
-    const giphyImage = document.getElementById('giphy-image');
-    giphyImage.src = gifUrl;
+    giphyImage.src = celebrationGifs[randomIndex];
+    giphyImage.style.opacity = '0';
     giphyImage.classList.remove('hidden');
+    
+    setTimeout(() => {
+      giphyImage.style.transition = 'opacity 0.5s ease-in';
+      giphyImage.style.opacity = '1';
+    }, 100);
   } else {
-    document.getElementById('consensus').classList.add('hidden');
+    consensusDiv.classList.add('hidden');
 
     // Check for large vote spread only among numeric votes
     if (numericVotes.length > 1) {
@@ -228,12 +401,21 @@ function calculateAndDisplayResults(participants) {
       const maxIndex = fibonacciSequence.indexOf(maxVote);
 
       if (maxIndex - minIndex > 2) {
-        displayRandomGif();
+        // Show "let's talk" GIF with bounce effect
+        const randomIndex = Math.floor(Math.random() * letsTalkGifs.length);
+        giphyImage.src = letsTalkGifs[randomIndex];
+        giphyImage.style.transform = 'scale(0)';
+        giphyImage.classList.remove('hidden');
+        
+        setTimeout(() => {
+          giphyImage.style.transition = 'transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+          giphyImage.style.transform = 'scale(1)';
+        }, 100);
       } else {
-        document.getElementById('giphy-image').classList.add('hidden');
+        giphyImage.classList.add('hidden');
       }
     } else {
-      document.getElementById('giphy-image').classList.add('hidden');
+      giphyImage.classList.add('hidden');
     }
   }
 }

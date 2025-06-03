@@ -1,13 +1,206 @@
 /* styles.css */
+:root {
+    --primary-color: #60A5FA;
+    --secondary-color: #3B82F6;
+    --accent-color: #10B981;
+    --background-dark: #1a1a1a;
+    --text-light: #ffffff;
+    --card-dark: #2d3748;
+    --card-hover-transform: translateY(-4px);
+}
+
 html.dark {
-    background-color: #1a1a1a;
-    color: #ffffff;
+    background-color: var(--background-dark);
+    color: var(--text-light);
 }
 
 .theme-transition {
     transition: all 0.3s ease;
 }
+
+/* Add ripple animation */
+@keyframes ripple {
+    0% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(2);
+        opacity: 0;
+    }
+}
+
+/* Modern Card Styles */
+.modern-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.modern-card:hover {
+    transform: var(--card-hover-transform);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Floating Animation */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+}
+
+.float-animation {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.pulse-animation {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* Gradient Text */
+.gradient-text {
+    background: linear-gradient(45deg, var(--primary-color), var(--accent-color));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: bold;
+}
 /* Add to your existing styles.css */
+/* Vote Button Styles */
+.vote-button {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.vote-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.vote-button.selected {
+    animation: selected-pulse 2s infinite;
+}
+
+@keyframes selected-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(96, 165, 250, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+}
+
+/* Participant Card Styles */
+.participant {
+    transition: all 0.3s ease;
+}
+
+.participant:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.participant.voted {
+    border-left: 4px solid #10B981;
+}
+
+/* Results Animation */
+@keyframes slide-up {
+    0% { transform: translateY(20px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.results-animation {
+    animation: slide-up 0.5s ease-out forwards;
+}
+
+/* Enhanced Rainbow Text */
+@keyframes rainbow {
+    0% { color: #FF0000; }
+    16.666% { color: #FF00FF; }
+    33.333% { color: #0000FF; }
+    50% { color: #00FFFF; }
+    66.666% { color: #00FF00; }
+    83.333% { color: #FFFF00; }
+    100% { color: #FF0000; }
+}
+
+.rainbow-text {
+    animation: rainbow 4s linear infinite;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Emoji Grid Styles */
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    padding: 16px;
+}
+
+.emoji-option {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.emoji-option:hover {
+    transform: scale(1.1);
+    background: rgba(96, 165, 250, 0.2);
+    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
+}
+
+/* Input Styles */
+.modern-input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.modern-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+    outline: none;
+}
+
+/* Button Hover Effects */
+.hover-effect {
+    transition: all 0.3s ease;
+}
+
+.hover-effect:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Add glass morphism effect */
+.glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+}
+
 #room-id-display {
     background-color: rgba(0, 0, 0, 0.05);
     padding: 2px 6px;
