@@ -5,7 +5,8 @@ let currentRoom = new URLSearchParams(window.location.search).get('room') || '';
 let selectedEmoji = '';
 let sessionId = localStorage.getItem('sessionId');
 const emojis = ['😀', '😎', '🤓', '🦄', '🐱', '🐶', '🦊', '🐸', '🐼', '🐯'];
-const fibonacciSequence = [1, 2, 3, 5, 8, 13];
+const fibonacciSequence = [1, 2, 3, 5, 8, 13, 'Pass'];
+const voteOptions = [1, 2, 3, 5, 8, 13, 'Pass'];
 
 const letsTalkGifs = [
   'https://i.giphy.com/tbEjpqYUbeGyZtIcES.webp',
@@ -113,7 +114,11 @@ function vote(value) {
   // Update UI to show selected vote
   document.querySelectorAll('.vote-button').forEach((button) => {
     button.classList.remove('selected');
-    if (parseInt(button.textContent) === value) {
+
+    if (
+      button.textContent == value ||
+      (typeof value === 'number' && parseInt(button.textContent) === value)
+    ) {
       button.classList.add('selected');
     }
   });
@@ -163,16 +168,43 @@ function updateParticipantList(participants, revealed = false) {
 }
 
 function calculateAndDisplayResults(participants) {
-  const votes = participants.map((p) => p.vote).filter((v) => v !== null);
+  // Filter out Pass votes and null votes for average calculation
+  const numericVotes = participants
+    .map((p) => p.vote)
+    .filter((v) => v !== null && v !== 'Pass' && typeof v === 'number');
 
   const average =
-    votes.length > 0 ? votes.reduce((a, b) => a + b, 0) / votes.length : 0;
+    numericVotes.length > 0
+      ? numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length
+      : 0;
 
-  document.getElementById('average-vote').textContent = average.toFixed(2);
-  document.getElementById('results').classList.remove('hidden');
+  // Display average and count of numeric votes vs total votes
+  const totalVotes = participants.filter((p) => p.vote !== null).length;
+  const passVotes = participants.filter((p) => p.vote === 'Pass').length;
 
-  const allSame = votes.length > 0 && votes.every((v) => v === votes[0]);
-  if (allSame) {
+  document.getElementById('average-vote').textContent =
+    numericVotes.length > 0 ? average.toFixed(2) : 'N/A';
+
+  // Update results display to show vote breakdown
+  const resultsDiv = document.getElementById('results');
+  const existingBreakdown = resultsDiv.querySelector('.vote-breakdown');
+  if (existingBreakdown) {
+    existingBreakdown.remove();
+  }
+
+  if (passVotes > 0) {
+    const breakdownDiv = document.createElement('div');
+    breakdownDiv.className = 'vote-breakdown text-sm text-gray-400 mt-2';
+    breakdownDiv.textContent = `${numericVotes.length} numeric votes, ${passVotes} pass votes`;
+    resultsDiv.appendChild(breakdownDiv);
+  }
+
+  resultsDiv.classList.remove('hidden');
+
+  // Check for consensus only among numeric votes
+  const allSame =
+    numericVotes.length > 0 && numericVotes.every((v) => v === numericVotes[0]);
+  if (allSame && numericVotes.length > 1) {
     document.getElementById('consensus').classList.remove('hidden');
     confetti({
       particleCount: 100,
@@ -187,14 +219,19 @@ function calculateAndDisplayResults(participants) {
     giphyImage.classList.remove('hidden');
   } else {
     document.getElementById('consensus').classList.add('hidden');
-    // Check for large vote spread
-    const minVote = Math.min(...votes);
-    const maxVote = Math.max(...votes);
-    const minIndex = fibonacciSequence.indexOf(minVote);
-    const maxIndex = fibonacciSequence.indexOf(maxVote);
 
-    if (maxIndex - minIndex > 2) {
-      displayRandomGif();
+    // Check for large vote spread only among numeric votes
+    if (numericVotes.length > 1) {
+      const minVote = Math.min(...numericVotes);
+      const maxVote = Math.max(...numericVotes);
+      const minIndex = fibonacciSequence.indexOf(minVote);
+      const maxIndex = fibonacciSequence.indexOf(maxVote);
+
+      if (maxIndex - minIndex > 2) {
+        displayRandomGif();
+      } else {
+        document.getElementById('giphy-image').classList.add('hidden');
+      }
     } else {
       document.getElementById('giphy-image').classList.add('hidden');
     }

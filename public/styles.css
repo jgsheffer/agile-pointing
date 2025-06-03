@@ -218,6 +218,11 @@ html.dark .submit-button:hover {
     color: #000;
 }
 
+.md-btn-tertiary {
+    background-color: #c23932; 
+    color: #c23932;
+}
+
 .md-btn-primary:hover {
     background-color: #3B82F6;
     color: #fff;
