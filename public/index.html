@@ -294,7 +294,44 @@
           </div>
           <div class="mb-8">
             <p class="mb-4 text-lg font-medium gradient-text">Choose your avatar:</p>
-            <div id="emoji-grid" class="emoji-grid"></div>
+            <div class="mb-4">
+              <div class="flex space-x-4 mb-4">
+                <button onclick="switchAvatarMode('emoji')" class="avatar-mode-btn md-btn md-btn-primary px-4 py-2 rounded" data-mode="emoji">Emoji</button>
+                <button onclick="switchAvatarMode('dicebear')" class="avatar-mode-btn md-btn md-btn-primary px-4 py-2 rounded" data-mode="dicebear">Generated Avatar</button>
+                <button onclick="switchAvatarMode('custom')" class="avatar-mode-btn md-btn md-btn-primary px-4 py-2 rounded" data-mode="custom">Custom Image</button>
+              </div>
+              <div id="emoji-grid" class="emoji-grid avatar-section" data-section="emoji"></div>
+              <div id="dicebear-options" class="hidden avatar-section" data-section="dicebear">
+                <div class="mb-4">
+                  <label class="block text-sm font-medium text-gray-300 mb-2">Style:</label>
+                  <select id="avatar-style" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="avataaars">Human</option>
+                    <option value="bottts">Robot</option>
+                    <option value="pixel-art">Pixel Art</option>
+                    <option value="identicon">Abstract</option>
+                  </select>
+                </div>
+                <div class="mb-4">
+                  <button onclick="regenerateAvatar()" class="md-btn md-btn-secondary px-4 py-2 rounded w-full">
+                    <span class="material-icons mr-2">refresh</span>Generate New
+                  </button>
+                </div>
+                <div id="dicebear-preview" class="w-24 h-24 mx-auto bg-gray-700 rounded-lg overflow-hidden">
+                  <img id="dicebear-image" class="w-full h-full object-cover" alt="Generated avatar">
+                </div>
+              </div>
+              <div id="custom-upload" class="hidden avatar-section" data-section="custom">
+                <div class="mb-4">
+                  <input type="file" id="avatar-upload" accept="image/*, .gif" class="hidden">
+                  <button onclick="document.getElementById('avatar-upload').click()" class="md-btn md-btn-secondary px-4 py-2 rounded w-full">
+                    <span class="material-icons mr-2">upload</span>Upload Image
+                  </button>
+                </div>
+                <div id="custom-preview" class="w-24 h-24 mx-auto bg-gray-700 rounded-lg overflow-hidden hidden">
+                  <img id="custom-image" class="w-full h-full object-cover" alt="Custom avatar">
+                </div>
+              </div>
+            </div>
           </div>
           <button
             onclick="joinRoom()"

@@ -2,10 +2,83 @@
 const socket = io();
 // Update the currentRoom initialization to use URL parameters
 let currentRoom = new URLSearchParams(window.location.search).get('room') || '';
-let selectedEmoji = '';
+let selectedAvatar = '';
+let selectedAvatarType = 'emoji';
 let sessionId = localStorage.getItem('sessionId');
 const emojis = ['😀', '😎', '🤓', '🦄', '🐱', '🐶', '🦊', '🐸', '🐼', '🐯'];
 const fibonacciSequence = [1, 2, 3, 5, 8, 13, 'Pass'];
+
+// Avatar handling functions
+function switchAvatarMode(mode) {
+  selectedAvatarType = mode;
+  document.querySelectorAll('.avatar-section').forEach((section) => {
+    section.classList.add('hidden');
+  });
+  document.querySelector(`[data-section="${mode}"]`).classList.remove('hidden');
+
+  document.querySelectorAll('.avatar-mode-btn').forEach((btn) => {
+    if (btn.dataset.mode === mode) {
+      btn.classList.add('selected');
+    } else {
+      btn.classList.remove('selected');
+    }
+  });
+
+  if (mode === 'dicebear') {
+    regenerateAvatar();
+  }
+}
+
+function regenerateAvatar() {
+  const style = document.getElementById('avatar-style').value;
+  const seed = Math.random().toString(36).substring(7);
+  const avatarUrl = `https://api.dicebear.com/6.x/${style}/svg?seed=${seed}`;
+
+  const img = document.getElementById('dicebear-image');
+  img.src = avatarUrl;
+  selectedAvatar = avatarUrl;
+}
+
+function handleCustomAvatarUpload(event) {
+  const file = event.target.files[0];
+  if (file) {
+    // Check file size (limit to 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    // Check file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a valid image file (JPEG, PNG, or WEBP)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const img = document.getElementById('custom-image');
+      img.src = e.target.result;
+      selectedAvatar = e.target.result;
+      selectedAvatarType = 'custom';
+      document.getElementById('custom-preview').classList.remove('hidden');
+
+      // For GIFs, ensure proper animation display
+      if (file.type === 'image/gif') {
+        img.style.imageRendering = 'auto';
+        // Remove any existing background to ensure GIF transparency works
+        img.parentElement.style.background = 'none';
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+// Add event listener for file upload
+document
+  .getElementById('avatar-upload')
+  ?.addEventListener('change', handleCustomAvatarUpload);
 const voteOptions = [1, 2, 3, 5, 8, 13, 'Pass'];
 
 const letsTalkGifs = [
@@ -42,7 +115,8 @@ function populateEmojiGrid() {
 }
 
 function selectEmoji(emoji) {
-  selectedEmoji = emoji;
+  selectedAvatar = emoji;
+  selectedAvatarType = 'emoji';
   document.querySelectorAll('.emoji-option').forEach((el) => {
     el.style.backgroundColor = el.textContent === emoji ? '#3700B3' : '#2c2c2c';
   });
@@ -76,18 +150,29 @@ function updateRoomHeader(roomId, show = true) {
 function joinRoom() {
   const name = document.getElementById('name').value;
   const room = document.getElementById('room').value || currentRoom;
-  if (name && room && selectedEmoji) {
+  if (name && room && selectedAvatar) {
     // Update URL with room parameter
     const newUrl = `${window.location.pathname}?room=${room}`;
     window.history.pushState({}, '', newUrl);
     currentRoom = room;
-    socket.emit('joinRoom', { room, name, avatar: selectedEmoji, sessionId });
+    socket.emit('joinRoom', {
+      room,
+      name,
+      avatar: selectedAvatar,
+      avatarType: selectedAvatarType,
+      sessionId,
+    });
     document.getElementById('join-form').classList.add('hidden');
     document.getElementById('voting-area').classList.remove('hidden');
     updateRoomHeader(room, true);
     localStorage.setItem(
       'pokerSession',
-      JSON.stringify({ name, room, avatar: selectedEmoji })
+      JSON.stringify({
+        name,
+        room,
+        avatar: selectedAvatar,
+        avatarType: selectedAvatarType,
+      })
     );
   } else {
     alert('Please enter your name, room ID, and select an avatar.');
@@ -116,14 +201,14 @@ function vote(value) {
   document.querySelectorAll('.vote-button').forEach((button) => {
     button.classList.remove('selected');
     button.style.transform = 'scale(1)';
-    
+
     const buttonValue = button.textContent.trim();
     if (
       buttonValue == value ||
       (typeof value === 'number' && parseInt(buttonValue) === value)
     ) {
       button.classList.add('selected');
-      
+
       // Add pop effect
       button.style.transform = 'scale(1.15)';
       setTimeout(() => {
@@ -135,31 +220,33 @@ function vote(value) {
       ripple.className = 'absolute inset-0 bg-white rounded-xl';
       ripple.style.animation = 'ripple 0.6s linear';
       button.appendChild(ripple);
-      
+
       setTimeout(() => ripple.remove(), 700);
 
       // Add micro-confetti burst from the button
       const rect = button.getBoundingClientRect();
       const buttonCenterX = (rect.left + rect.right) / 2;
       const buttonCenterY = rect.top;
-      
+
       confetti({
         particleCount: 20,
         spread: 30,
         startVelocity: 20,
         origin: {
           x: buttonCenterX / window.innerWidth,
-          y: buttonCenterY / window.innerHeight
+          y: buttonCenterY / window.innerHeight,
         },
         colors: ['#60A5FA', '#3B82F6', '#2563EB'],
         shapes: ['circle'],
-        scalar: 0.75
+        scalar: 0.75,
       });
     }
   });
 
   // Add voting sound effect
-  const audio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+  const audio = new Audio(
+    'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  );
   audio.volume = 0.2;
   audio.play();
 
@@ -174,7 +261,8 @@ function vote(value) {
     for (let i = 0; i < 3; i++) {
       const particle = document.createElement('div');
       particle.textContent = value;
-      particle.className = 'absolute text-2xl font-bold text-blue-400 pointer-events-none';
+      particle.className =
+        'absolute text-2xl font-bold text-blue-400 pointer-events-none';
       particle.style.left = `${centerX}px`;
       particle.style.top = `${centerY}px`;
       particle.style.transform = 'scale(0)';
@@ -182,7 +270,7 @@ function vote(value) {
       document.body.appendChild(particle);
 
       // Random direction for each particle
-      const angle = (Math.random() * Math.PI * 2);
+      const angle = Math.random() * Math.PI * 2;
       const distance = 100 + Math.random() * 50;
       const destinationX = centerX + Math.cos(angle) * distance;
       const destinationY = centerY + Math.sin(angle) * distance;
@@ -227,37 +315,60 @@ function updateParticipantList(participants, revealed = false) {
   participantsDiv.innerHTML = '';
   participants.forEach((p) => {
     const div = document.createElement('div');
-    div.className = 'participant modern-card p-6 flex items-center space-x-4 transform transition-all duration-300 hover:scale-105';
-    
+    div.className =
+      'participant modern-card p-6 flex items-center space-x-4 transform transition-all duration-300 hover:scale-105';
+
     // Add a random animation delay for a staggered effect
     const delay = Math.random() * 0.5;
     div.style.animationDelay = `${delay}s`;
-    
-    const voteStatus = p.vote 
-      ? revealed 
+
+    const voteStatus = p.vote
+      ? revealed
         ? `<span class="text-2xl font-bold gradient-text">${p.vote}</span>`
         : '<span class="material-icons text-green-400 animate-pulse">check_circle</span>'
       : '<span class="material-icons text-gray-400 float-animation">help_outline</span>';
 
+    // Handle different avatar types
+    let avatarContent;
+    let avatarContainerClass =
+      'flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300 overflow-hidden';
+
+    if (p.avatarType === 'emoji') {
+      avatarContent = p.avatar;
+    } else if (p.avatarType === 'dicebear') {
+      avatarContent = `<img src="${p.avatar}" class="w-full h-full object-cover" alt="Avatar">`;
+    } else if (p.avatarType === 'custom') {
+      // Check if the avatar is a GIF by looking at the data URL
+      const isGif = p.avatar.startsWith('data:image/gif;');
+      if (isGif) {
+        // For GIFs, remove background gradient and adjust container
+        avatarContainerClass =
+          'flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300 overflow-hidden bg-transparent';
+        avatarContent = `<img src="${p.avatar}" class="w-full h-full object-contain" style="image-rendering: auto;" alt="Avatar">`;
+      } else {
+        avatarContent = `<img src="${p.avatar}" class="w-full h-full object-cover" alt="Avatar">`;
+      }
+    }
+
     div.innerHTML = `
-      <div class="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300">
-        ${p.avatar}
+      <div class="${avatarContainerClass}">
+        ${avatarContent}
       </div>
       <span class="font-medium text-lg">${p.name}</span>
       <span class="ml-auto">
         ${voteStatus}
       </span>
     `;
-    
+
     if (p.vote) {
       div.classList.add('voted');
       // Add a subtle glow effect for voted participants
       div.style.boxShadow = '0 0 15px rgba(74, 222, 128, 0.2)';
     }
-    
+
     participantsDiv.appendChild(div);
   });
-  
+
   // Add entrance animation for new participants
   const allParticipants = participantsDiv.querySelectorAll('.participant');
   allParticipants.forEach((participant, index) => {
@@ -287,23 +398,23 @@ function calculateAndDisplayResults(participants) {
 
   const resultsDiv = document.getElementById('results');
   const averageVoteSpan = document.getElementById('average-vote');
-  
+
   // Animate the average vote number counting up
   const duration = 1500;
   const steps = 30;
   const stepDuration = duration / steps;
   let currentStep = 0;
-  
+
   const startValue = 0;
   const endValue = parseFloat(average.toFixed(2));
-  
+
   if (numericVotes.length > 0) {
     const interval = setInterval(() => {
       currentStep++;
       const progress = currentStep / steps;
       const currentValue = startValue + (endValue - startValue) * progress;
       averageVoteSpan.textContent = currentValue.toFixed(2);
-      
+
       if (currentStep === steps) {
         clearInterval(interval);
         // Add a small bounce animation when done counting
@@ -325,10 +436,11 @@ function calculateAndDisplayResults(participants) {
 
   if (passVotes > 0) {
     const breakdownDiv = document.createElement('div');
-    breakdownDiv.className = 'vote-breakdown text-lg text-gray-400 mt-4 opacity-0 transform translate-y-4';
+    breakdownDiv.className =
+      'vote-breakdown text-lg text-gray-400 mt-4 opacity-0 transform translate-y-4';
     breakdownDiv.textContent = `${numericVotes.length} numeric votes, ${passVotes} pass votes`;
     resultsDiv.appendChild(breakdownDiv);
-    
+
     // Fade in animation
     setTimeout(() => {
       breakdownDiv.style.transition = 'all 0.5s ease-out';
@@ -342,13 +454,13 @@ function calculateAndDisplayResults(participants) {
   // Check for consensus only among numeric votes
   const allSame =
     numericVotes.length > 0 && numericVotes.every((v) => v === numericVotes[0]);
-  
+
   const consensusDiv = document.getElementById('consensus');
   const giphyImage = document.getElementById('giphy-image');
-  
+
   if (allSame && numericVotes.length > 1) {
     consensusDiv.classList.remove('hidden');
-    
+
     // Enhanced confetti effect
     const duration = 3 * 1000;
     const animationEnd = Date.now() + duration;
@@ -358,7 +470,7 @@ function calculateAndDisplayResults(participants) {
       return Math.random() * (max - min) + min;
     }
 
-    const interval = setInterval(function() {
+    const interval = setInterval(function () {
       const timeLeft = animationEnd - Date.now();
 
       if (timeLeft <= 0) {
@@ -366,17 +478,17 @@ function calculateAndDisplayResults(participants) {
       }
 
       const particleCount = 50 * (timeLeft / duration);
-      
+
       // Create confetti from multiple origins
       confetti({
         ...defaults,
         particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
       });
       confetti({
         ...defaults,
         particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
       });
     }, 250);
 
@@ -385,7 +497,7 @@ function calculateAndDisplayResults(participants) {
     giphyImage.src = celebrationGifs[randomIndex];
     giphyImage.style.opacity = '0';
     giphyImage.classList.remove('hidden');
-    
+
     setTimeout(() => {
       giphyImage.style.transition = 'opacity 0.5s ease-in';
       giphyImage.style.opacity = '1';
@@ -406,9 +518,10 @@ function calculateAndDisplayResults(participants) {
         giphyImage.src = letsTalkGifs[randomIndex];
         giphyImage.style.transform = 'scale(0)';
         giphyImage.classList.remove('hidden');
-        
+
         setTimeout(() => {
-          giphyImage.style.transition = 'transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+          giphyImage.style.transition =
+            'transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
           giphyImage.style.transform = 'scale(1)';
         }, 100);
       } else {

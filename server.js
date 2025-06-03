@@ -52,7 +52,7 @@ io.on('connection', (socket) => {
   let socketSessionId = null;
 
   // Pointing Poker handlers
-  socket.on('joinRoom', ({ room, name, avatar, sessionId }) => {
+  socket.on('joinRoom', ({ room, name, avatar, avatarType, sessionId }) => {
     let userSessionId = sessionId;
     if (!userSessionId || !sessions.has(userSessionId)) {
       userSessionId = uuidv4();
@@ -67,14 +67,14 @@ io.on('connection', (socket) => {
       }
     }
 
-    sessions.set(userSessionId, { room, name, avatar, socketId: socket.id });
+    sessions.set(userSessionId, { room, name, avatar, avatarType, socketId: socket.id });
     socketSessionId = userSessionId;
     socket.join(room);
 
     if (!pointingRooms.has(room)) {
       pointingRooms.set(room, new Map());
     }
-    pointingRooms.get(room).set(userSessionId, { name, avatar, vote: null });
+    pointingRooms.get(room).set(userSessionId, { name, avatar, avatarType, vote: null });
 
     socket.emit('sessionCreated', userSessionId);
     io.to(room).emit(
