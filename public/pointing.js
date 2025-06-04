@@ -8,6 +8,24 @@ let sessionId = localStorage.getItem('sessionId');
 const emojis = ['😀', '😎', '🤓', '🦄', '🐱', '🐶', '🦊', '🐸', '🐼', '🐯'];
 const fibonacciSequence = [1, 2, 3, 5, 8, 13, 'Pass'];
 
+// Initialize audio context and sound effect
+let voteSound = null;
+let audioContext = null;
+
+function initAudio() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Create and cache the audio object
+        voteSound = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAA<TRUNCATED>');
+        voteSound.volume = 0.2;
+    }
+}
+
+// Initialize audio on first user interaction
+document.addEventListener('click', function() {
+    initAudio();
+}, { once: true });
+
 // Avatar handling functions
 function switchAvatarMode(mode) {
   selectedAvatarType = mode;
@@ -50,9 +68,9 @@ function handleCustomAvatarUpload(event) {
     }
 
     // Check file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      alert('Please upload a valid image file (JPEG, PNG, or WEBP)');
+      alert('Please upload a valid image file (JPEG, PNG, WEBP, or GIF)');
       return;
     }
 
@@ -63,6 +81,10 @@ function handleCustomAvatarUpload(event) {
       selectedAvatar = e.target.result;
       selectedAvatarType = 'custom';
       document.getElementById('custom-preview').classList.remove('hidden');
+
+      // Store the custom avatar data in localStorage
+      localStorage.setItem('customAvatarData', e.target.result);
+      localStorage.setItem('customAvatarType', file.type);
 
       // For GIFs, ensure proper animation display
       if (file.type === 'image/gif') {
@@ -188,6 +210,8 @@ function leaveRoom() {
   document.getElementById('giphy-image').classList.add('hidden');
   updateRoomHeader('', false);
   localStorage.removeItem('pokerSession');
+  localStorage.removeItem('customAvatarData');
+  localStorage.removeItem('customAvatarType');
 }
 
 // Voting functionality
@@ -546,7 +570,37 @@ function checkExistingSession() {
   if (session) {
     document.getElementById('name').value = session.name;
     document.getElementById('room').value = session.room;
-    selectEmoji(session.avatar);
+
+    // Restore custom avatar if it exists
+    const customAvatarData = localStorage.getItem('customAvatarData');
+    const customAvatarType = localStorage.getItem('customAvatarType');
+    
+    if (session.avatarType === 'custom' && customAvatarData) {
+      // Restore custom avatar preview
+      const img = document.getElementById('custom-image');
+      img.src = customAvatarData;
+      selectedAvatar = customAvatarData;
+      selectedAvatarType = 'custom';
+      document.getElementById('custom-preview').classList.remove('hidden');
+      
+      // Switch to custom avatar mode
+      switchAvatarMode('custom');
+
+      // Handle GIF specific settings
+      if (customAvatarType === 'image/gif') {
+        img.style.imageRendering = 'auto';
+        img.parentElement.style.background = 'none';
+      }
+    } else if (session.avatarType === 'emoji') {
+      selectEmoji(session.avatar);
+    } else if (session.avatarType === 'dicebear') {
+      selectedAvatar = session.avatar;
+      selectedAvatarType = 'dicebear';
+      const img = document.getElementById('dicebear-image');
+      img.src = session.avatar;
+      switchAvatarMode('dicebear');
+    }
+
     joinRoom();
   }
 }
