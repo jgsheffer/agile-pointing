@@ -51,7 +51,7 @@ io.on('connection', (socket) => {
   let currentUser = null;
   let socketSessionId = null;
 
-  // Pointing Poker handlers
+  // Agile Pointing handlers
   socket.on('joinRoom', ({ room, name, avatar, avatarType, sessionId }) => {
     let userSessionId = sessionId;
     if (!userSessionId || !sessions.has(userSessionId)) {
@@ -67,14 +67,22 @@ io.on('connection', (socket) => {
       }
     }
 
-    sessions.set(userSessionId, { room, name, avatar, avatarType, socketId: socket.id });
+    sessions.set(userSessionId, {
+      room,
+      name,
+      avatar,
+      avatarType,
+      socketId: socket.id,
+    });
     socketSessionId = userSessionId;
     socket.join(room);
 
     if (!pointingRooms.has(room)) {
       pointingRooms.set(room, new Map());
     }
-    pointingRooms.get(room).set(userSessionId, { name, avatar, avatarType, vote: null });
+    pointingRooms
+      .get(room)
+      .set(userSessionId, { name, avatar, avatarType, vote: null });
 
     socket.emit('sessionCreated', userSessionId);
     io.to(room).emit(

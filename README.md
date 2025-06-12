@@ -1,6 +1,6 @@
-# NetJets Agile Tools: Pointing Poker & Sprint Retro
+# NetJets Agile Tools: Agile Pointing & Sprint Retro
 
-A real-time collaborative application for agile teams, featuring pointing poker for story estimation and a sprint retrospective board.
+A real-time collaborative application for agile teams, featuring Agile Pointing for story estimation and a sprint retrospective board.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D14.0.0-green.svg)
@@ -8,7 +8,7 @@ A real-time collaborative application for agile teams, featuring pointing poker 
 
 ## Features
 
-### Pointing Poker
+### Agile Pointing
 - Real-time story point estimation using Fibonacci sequence
 - Anonymous voting with reveal/reset functionality
 - Visual consensus indicators with confetti effect
@@ -55,7 +55,7 @@ project-root/
 ├── server.js                # Main server file
 ├── package.json
 └── public/
-    ├── index.html          # Pointing Poker interface
+    ├── index.html          # Agile Pointing interface
     ├── retro.html          # Retrospective interface
     └── retro.js            # Retrospective logic
 ```
@@ -64,7 +64,7 @@ project-root/
 
 ### Server-Side Storage
 ```javascript
-// Pointing Poker Rooms
+// Agile Pointing Rooms
 const pointingRooms = new Map();  // roomId -> Map<sessionId, participantData>
 
 // Retro Rooms
@@ -90,7 +90,7 @@ const sessions = new Map();       // sessionId -> sessionData
 
 ## Socket Events
 
-### Pointing Poker
+### Agile Pointing
 - `joinRoom`
 - `vote`
 - `revealVotes`
@@ -154,16 +154,16 @@ node server.js
 ## Usage
 
 ### Accessing the Application
-- Pointing Poker: `http://localhost:3000`
+- Agile Pointing: `http://localhost:3000`
 - Retrospective: `http://localhost:3000/retro.html`
 - Room-specific: Add `?room=ROOMID` to any URL
 
 ### Creating a Room
-1. Visit either the pointing poker or retro page
+1. Visit either the Agile Pointing or retro page
 2. Room is automatically created with random ID
 3. Share the room link with participants
 
-### Pointing Poker
+### Agile Pointing
 1. Join with anonymous animal name
 2. Vote on story points using Fibonacci numbers
 3. Reveal votes when everyone has voted
