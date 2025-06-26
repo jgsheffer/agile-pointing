@@ -1,4 +1,4 @@
-# NetJets Agile Tools: Agile Pointing & Sprint Retro
+# Agile Tools: Agile Pointing & Sprint Retro
 
 A real-time collaborative application for agile teams, featuring Agile Pointing for story estimation and a sprint retrospective board.
 

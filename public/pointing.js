@@ -337,7 +337,6 @@ function vote(value) {
       }, 500);
     }
   }
-  console.log('isValidVote(value)', isValidVote(value));
   socket.emit('vote', {
     room: currentRoom,
     vote: isValidVote(value),
