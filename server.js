@@ -305,11 +305,6 @@ app.post('/validate-access', (req, res) => {
   try {
     const { accessCode } = req.body;
 
-    // Add some logging to debug
-    console.log('Received access code validation request');
-    console.log('Expected:', process.env.ACCESS_CODE);
-    console.log('Received:', accessCode);
-
     if (accessCode === process.env.ACCESS_CODE) {
       res.json({ valid: true });
     } else {
