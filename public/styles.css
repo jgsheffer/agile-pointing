@@ -159,6 +159,35 @@ select.text-input option { background: #111827; }
   white-space: nowrap;
 }
 
+/* ---------- Page navigation ---------- */
+
+.nav-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background-color 0.2s, color 0.2s;
+}
+.nav-tab .material-icons { font-size: 18px; }
+.nav-tab:hover { color: #fff; background: var(--surface-strong); }
+.nav-tab.active { color: #fff; background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+@media (max-width: 640px) {
+  .nav-tab { padding: 5px 8px; }
+  .nav-label { display: none; }
+}
+
 /* ---------- Join form ---------- */
 
 .avatar-mode-btn {

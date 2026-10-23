@@ -86,6 +86,8 @@ function updateRoomDisplay() {
     if (roomDisplay) {
         roomDisplay.textContent = roomId;
     }
+    // Same room name on the pointing page, so the team stays together
+    document.getElementById('nav-pointing').href = `/?room=${encodeURIComponent(roomId)}`;
 }
 
 function copyRoomLink() {
@@ -816,80 +818,6 @@ async function saveSketch() {
         toast(`Couldn't pin the sketch: ${error.message}`);
     } finally {
         button.disabled = false;
-    }
-}
-
-// ---------- PDF Generation ----------
-
-async function downloadPDF() {
-    const pdfButton = document.getElementById('pdf-btn');
-    const originalContent = pdfButton.innerHTML;
-    pdfButton.innerHTML = '<span class="material-icons">hourglass_top</span>Generating...';
-    const container = document.createElement('div');
-
-    try {
-        const contentClone = document.querySelector('#retro-content').cloneNode(true);
-
-        // Clean up the clone for PDF
-        contentClone.querySelectorAll('button').forEach(button => {
-            if (!button.classList.contains('vote-count')) {
-                button.remove();
-            }
-        });
-
-        contentClone.querySelectorAll('textarea').forEach(textarea => {
-            const div = document.createElement('div');
-            div.className = 'note-text';
-            div.textContent = textarea.value || 'Empty card';
-            textarea.parentNode.replaceChild(div, textarea);
-        });
-
-        container.style.background = '#0b0f19';
-        container.style.padding = '20px';
-        container.style.width = `${document.querySelector('#retro-content').offsetWidth + 40}px`;
-        container.appendChild(contentClone);
-        document.body.appendChild(container);
-
-        const canvas = await html2canvas(container, {
-            scale: 2,
-            backgroundColor: '#0b0f19',
-            useCORS: true,
-            logging: false
-        });
-
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgWidth = 210;
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        const pageHeight = 297;
-
-        // Add title and metadata
-        pdf.setFontSize(20);
-        pdf.text('Sprint Retrospective', 105, 15, { align: 'center' });
-        pdf.setFontSize(12);
-        pdf.text(`Generated: ${new Date().toLocaleString()}`, 105, 25, { align: 'center' });
-        pdf.text(`Room: ${roomId}`, 105, 32, { align: 'center' });
-
-        // Slice the board image across pages
-        const image = canvas.toDataURL('image/jpeg', 0.92);
-        let position = 40;
-        let offset = 0;
-        while (offset < imgHeight) {
-            pdf.addImage(image, 'JPEG', 0, position - offset, imgWidth, imgHeight);
-            offset += pageHeight - position;
-            position = 0;
-            if (offset < imgHeight) {
-                pdf.addPage();
-            }
-        }
-
-        pdf.save(`Sprint_Retro_${roomId}_${new Date().toISOString().split('T')[0]}.pdf`);
-    } catch (error) {
-        console.error('PDF generation failed:', error);
-        alert('Failed to generate PDF. Please try again.');
-    } finally {
-        container.remove();
-        pdfButton.innerHTML = originalContent;
     }
 }
 

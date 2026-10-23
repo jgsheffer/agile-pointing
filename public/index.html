@@ -26,8 +26,18 @@
         <div class="flex justify-between h-16 items-center gap-3">
           <div class="flex items-center gap-3 min-w-0">
             <span class="text-lg sm:text-xl font-bold whitespace-nowrap">
-              🃏 OhayoDev<span class="hidden sm:inline"> Agile Pointing</span>
+              OhayoDev
             </span>
+            <nav class="nav-tabs" aria-label="Tools">
+              <a href="/" class="nav-tab active" aria-current="page">
+                <span class="material-icons">style</span>
+                <span class="nav-label">Pointing</span>
+              </a>
+              <a id="nav-retro" href="/retro.html" class="nav-tab">
+                <span class="material-icons">dashboard</span>
+                <span class="nav-label">Retro</span>
+              </a>
+            </nav>
             <div id="header-room-info" class="room-info hidden">
               <span class="text-sm text-gray-300 hidden sm:inline">Room</span>
               <code id="header-room-id" class="text-sm font-mono"></code>
@@ -53,9 +63,6 @@
             >
               <span class="material-icons">volume_up</span>
             </button>
-            <a href="/retro.html" class="icon-btn" title="Sprint retro" aria-label="Sprint retro">
-              <span class="material-icons">dashboard</span>
-            </a>
             <button
               type="button"
               id="leave-btn"

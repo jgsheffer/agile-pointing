@@ -26,10 +26,11 @@ A real-time collaborative application for agile teams, featuring Agile Pointing 
 - Drag colored sticky notes from the pad onto any spot on the board, and move them between columns
 - Drop, paste or upload images onto a column
 - Sketch pad (pen colors, sizes, eraser, undo) that pins drawings to the board
-- Voting, similar-note grouping, PDF export and a 5-minute timer
+- Voting, similar-note grouping and a 5-minute timer
 
 ### Shared Features
 - Access code gate shared by both boards
+- Pointing / Retro tabs in the header; switching keeps the same room name
 - Room-based collaboration with shareable links
 - Anonymous animal-based naming system (retro)
 - Dark theme
@@ -52,7 +53,6 @@ A real-time collaborative application for agile teams, featuring Agile Pointing 
 - WebSocket (Socket.IO Client, served by the app at `/socket.io/socket.io.js`)
 
 ### Additional Libraries
-- jsPDF & html2canvas: PDF generation
 - canvas-confetti: Consensus celebration (including emoji confetti)
 
 ## Project Structure
@@ -234,7 +234,6 @@ Custom avatars are cropped and resized to 128×128 in the browser. Animated GIFs
 4. Vote on items for prioritization
 5. Use timer for timeboxed discussions
 6. Group similar notes to merge duplicates (and their votes)
-7. Export to PDF when complete
 
 ## Development Notes
 

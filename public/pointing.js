@@ -283,6 +283,10 @@ function copyRoomLink() {
 }
 
 function updateRoomHeader(roomId, show = true) {
+  // Same room name on the retro board, so the team stays together
+  document.getElementById('nav-retro').href = show
+    ? `/retro.html?room=${encodeURIComponent(roomId)}`
+    : '/retro.html';
   document.getElementById('header-room-info').classList.toggle('hidden', !show);
   document.getElementById('header-room-id').textContent = show ? roomId : '';
   document.getElementById('leave-btn').classList.toggle('hidden', !show);

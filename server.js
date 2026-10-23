@@ -371,18 +371,13 @@ function createServer({
     helmet({
       contentSecurityPolicy: {
         directives: {
-          'script-src': [
-            "'self'",
-            'https://cdn.jsdelivr.net',
-            'https://cdnjs.cloudflare.com',
-          ],
+          'script-src': ["'self'", 'https://cdn.jsdelivr.net'],
           // Inline onclick="" handlers in the HTML pages
           'script-src-attr': ["'unsafe-inline'"],
           'style-src': [
             "'self'",
             "'unsafe-inline'",
             'https://cdn.jsdelivr.net',
-            'https://cdnjs.cloudflare.com',
             'https://fonts.googleapis.com',
           ],
           'font-src': ["'self'", 'https://fonts.gstatic.com'],
