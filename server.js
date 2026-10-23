@@ -939,6 +939,36 @@ function createServer({
       logRoomState(room, 'join');
     });
 
+    // Changing your name also re-labels what you wrote and voted on, unless
+    // someone else in the room still goes by the old name
+    on('renameRetro', (payload, ack) => {
+      const membership = socket.data.retro;
+      const roomData = membership && retroRooms.get(membership.room);
+      const name = cleanName(payload.name);
+      if (!roomData || !name) return;
+
+      const oldName = membership.name;
+      if (name !== oldName) {
+        membership.name = name;
+        roomData.participants.set(socket.id, name);
+        if (!retroParticipantNames(roomData).includes(oldName)) {
+          const rename = (value) => (value === oldName ? name : value);
+          for (const card of roomData.cards) {
+            card.author = rename(card.author);
+            card.voters = [...new Set(card.voters.map(rename))];
+            card.votes = card.voters.length;
+            for (const grouped of card.groupedCards) grouped.author = rename(grouped.author);
+          }
+          io.to(membership.room).emit('loadCards', { cards: roomData.cards });
+        }
+        roomData.lastActivity = Date.now();
+        io.to(membership.room).emit('updateParticipants', {
+          participants: retroParticipantNames(roomData),
+        });
+      }
+      if (typeof ack === 'function') ack({ name });
+    });
+
     const newCard = (roomData, membership, fields) => ({
       id: crypto.randomUUID(),
       type: 'note',

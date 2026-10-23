@@ -59,7 +59,21 @@
 
           <div class="flex items-center gap-3 min-w-0">
             <div id="participants-list" class="text-sm opacity-80 truncate hidden lg:block"></div>
-            <span id="user-name" class="opacity-80 whitespace-nowrap hidden sm:inline"></span>
+            <div class="name-control">
+              <button type="button" id="name-display" class="name-chip" onclick="editName()" title="Change your name">
+                <span class="material-icons">badge</span>
+                <span id="user-name"></span>
+                <span class="material-icons edit-icon">edit</span>
+              </button>
+              <form id="name-form" class="name-form hidden" onsubmit="saveName(event)">
+                <label for="name-input" class="sr-only">Your name on the board</label>
+                <input id="name-input" type="text" maxlength="40" autocomplete="nickname" placeholder="Your name" />
+                <button type="submit" class="icon-btn" title="Save name" aria-label="Save name">
+                  <span class="material-icons">check</span>
+                </button>
+                <button type="button" class="icon-btn" onclick="rollBreadName()" title="Random bread name" aria-label="Random bread name">🎲</button>
+              </form>
+            </div>
           </div>
         </div>
       </div>
@@ -101,7 +115,12 @@
         <canvas id="draw-layer" class="draw-layer hidden" aria-label="Drawing layer"></canvas>
         <div id="draw-toolbar" class="draw-toolbar hidden" role="toolbar" aria-label="Drawing tools">
           <div id="draw-colors" class="flex gap-2" role="group" aria-label="Pen color"></div>
-          <div id="draw-sizes" class="flex gap-2" role="group" aria-label="Pen size"></div>
+          <label class="pen-size" title="Pen size ([ and ] keys)">
+            <span id="draw-size-preview" class="pen-preview" aria-hidden="true"></span>
+            <span class="sr-only">Pen size</span>
+            <input id="draw-size" type="range" min="1" max="60" step="1" value="6" />
+            <span id="draw-size-value" class="pen-size-value">6px</span>
+          </label>
           <button type="button" id="draw-eraser" class="md-btn md-btn-ghost px-3 py-1" onclick="toggleEraser()">
             <span class="material-icons">auto_fix_normal</span>Eraser
           </button>

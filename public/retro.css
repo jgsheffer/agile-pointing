@@ -7,7 +7,7 @@
   --text: rgba(255, 255, 255, 0.87);
   --text-muted: rgba(255, 255, 255, 0.6);
   --item-width: 220px;
-  --column-width: 760px;
+  --column-width: 1200px;
 }
 
 body {
@@ -130,6 +130,37 @@ body {
   .nav-label { display: none; }
 }
 
+/* ---------- Your name ---------- */
+
+.name-control { display: flex; align-items: center; min-width: 0; }
+.name-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 16rem;
+  padding: 4px 10px;
+  border-radius: 9px;
+  background: var(--surface-strong);
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+.name-chip:hover { background: rgba(255, 255, 255, 0.15); }
+.name-chip .material-icons { font-size: 18px; opacity: 0.75; }
+.name-chip .edit-icon { font-size: 15px; opacity: 0.5; }
+#user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name-form { display: flex; align-items: center; gap: 2px; }
+.name-form.hidden, .name-chip.hidden { display: none; }
+.name-form input {
+  width: 12rem;
+  max-width: 40vw;
+  padding: 5px 10px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(96, 165, 250, 0.6);
+  color: #fff;
+}
+.name-form input:focus { outline: none; border-color: #60a5fa; }
+
 /* ---------- Sticky pad ---------- */
 
 .pad-note {
@@ -206,18 +237,18 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 28px;
   background: rgba(17, 24, 39, 0.55);
   border: 1px solid var(--border);
   border-radius: 20px;
 }
 .column-header { position: relative; margin-bottom: 16px; border-radius: 14px; transition: box-shadow 0.2s; }
 .column-header.drop-target { box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.7); }
-.column-header h2 { font-size: 1.6rem; }
+.column-header h2 { font-size: 2.2rem; }
 .column-banner {
   position: relative;
-  height: 200px;
-  margin-bottom: 14px;
+  height: 300px;
+  margin-bottom: 18px;
   border-radius: 14px;
   overflow: hidden;
   background: var(--surface);
@@ -241,7 +272,7 @@ body {
 
 .column-surface {
   position: relative;
-  min-height: 900px;
+  min-height: 1600px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.02);
   transition: background-color 0.2s, box-shadow 0.2s;
@@ -499,6 +530,30 @@ body {
   cursor: default;
 }
 .draw-toolbar.hidden { display: none; }
+
+.pen-size { display: inline-flex; align-items: center; gap: 8px; }
+.pen-size input[type='range'] { width: 140px; accent-color: #a78bfa; cursor: pointer; }
+.pen-preview {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--surface-strong);
+  align-items: center;
+  justify-content: center;
+}
+.pen-preview::after {
+  content: '';
+  width: var(--pen-dot, 6px);
+  height: var(--pen-dot, 6px);
+  max-width: 30px;
+  max-height: 30px;
+  border-radius: 999px;
+  background: var(--pen-color, #fff);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.pen-preview.erasing::after { background: transparent; border: 2px dashed #fff; box-shadow: none; }
+.pen-size-value { min-width: 2.6rem; font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .board-viewport.drawing .board-hint { display: none; }
 .swatch {
   width: 28px;

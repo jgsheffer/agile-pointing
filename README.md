@@ -28,14 +28,14 @@ A real-time collaborative application for agile teams, featuring Agile Pointing 
 - Every item can be resized from its corner handle (images and sketches keep their proportions)
 - Drag colored stickies from the pad, drop image files straight from your file explorer, or paste images
 - Images show as polaroids (white frame, handwritten author, a slight tilt)
-- Draw straight on the board: pen colors, sizes, eraser, undo; "Done drawing" saves the doodle with a transparent background, exactly where it was drawn, as a movable/resizable item
+- Draw straight on the board: pen colors, a 1-60px size slider (`[` / `]`), eraser, undo; "Done drawing" saves the doodle with a transparent background, exactly where it was drawn, as a movable/resizable item
 - Voting, similar-note grouping and a 5-minute timer
 
 ### Shared Features
 - Access code gate shared by both boards
 - Pointing / Retro tabs in the header; switching keeps the same room name
 - Room-based collaboration with shareable links
-- Anonymous animal-based naming system (retro)
+- Retro names: pick your own, or get a random bread ("Anon Baguette"); remembered on your device, and renaming re-labels your notes and votes
 - Dark theme
 - Real-time participant tracking
 - Persistent sessions
@@ -171,6 +171,7 @@ State arrives as `roomState`, `votesRevealed` and `votesReset`, each with `{ roo
 
 ### Retrospective
 - `joinRetro` `{ room, name }`
+- `renameRetro` `{ name }` (acknowledged with the accepted name; re-labels your notes and votes)
 - `addCard` `{ column, color, x, y }` (acknowledged with the new card id; `column` may be `null`)
 - `addImage` `{ imageId, type: 'image' | 'sketch', column, x, y, w? }` after uploading (doodles send the width they were drawn at)
 - `submitCard` `{ cardId, content }`

@@ -63,18 +63,101 @@ if (!roomId || !/^[\w -]{1,64}$/.test(roomId)) {
     window.history.pushState({ path: newUrl }, '', newUrl);
 }
 
-// User name generation
-const animals = [
-    'Panda','Red Panda', 'Tiger', 'Lion', 'Elephant', 'Giraffe', 'Penguin', 'Kangaroo', 'Koala',
-    'Dolphin', 'Zebra', 'Monkey', 'Bear', 'Fox', 'Wolf', 'Owl', 'Eagle', 'Rabbit'
+// Your name on the board: one you pick, or a random bread
+const breads = [
+    'Baguette', 'Sourdough', 'Brioche', 'Ciabatta', 'Focaccia', 'Croissant', 'Pretzel',
+    'Bagel', 'Naan', 'Pita', 'Rye', 'Challah', 'Pumpernickel', 'Cornbread', 'Banana Bread',
+    'Biscuit', 'Crumpet', 'Muffin', 'Tortilla', 'Flatbread', 'Panettone', 'Scone',
+    'Pandesal', 'Bao', 'Roti', 'Babka', 'Brötchen', 'Matzo', 'English Muffin', 'Pain au Chocolat'
 ];
+const NAME_KEY = 'retroName';
 
-function generateAnimalName() {
-    return `Anon ${animals[Math.floor(Math.random() * animals.length)]}`;
+function generateBreadName() {
+    let name;
+    do {
+        name = `Anon ${breads[Math.floor(Math.random() * breads.length)]}`;
+    } while (name === userName);
+    return name;
 }
 
-userName = generateAnimalName();
-document.getElementById('user-name').textContent = userName;
+function readSavedName() {
+    try {
+        return localStorage.getItem(NAME_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function rememberName(name) {
+    try {
+        localStorage.setItem(NAME_KEY, name);
+    } catch {
+        // Not remembered; you'll get a fresh bread next visit
+    }
+}
+
+const savedName = readSavedName();
+userName = savedName || generateBreadName();
+rememberName(userName);
+
+function renderName() {
+    document.getElementById('user-name').textContent = userName;
+}
+renderName();
+
+function editName() {
+    const input = document.getElementById('name-input');
+    input.value = userName;
+    document.getElementById('name-display').classList.add('hidden');
+    document.getElementById('name-form').classList.remove('hidden');
+    input.focus();
+    input.select();
+}
+
+function closeNameForm() {
+    document.getElementById('name-form').classList.add('hidden');
+    document.getElementById('name-display').classList.remove('hidden');
+}
+
+function saveName(event) {
+    event?.preventDefault();
+    // Enter saves and hides the form, which then also fires focusout
+    if (document.getElementById('name-form').classList.contains('hidden')) return;
+    const name = document.getElementById('name-input').value.trim();
+    closeNameForm();
+    if (name && name !== userName) requestRename(name);
+}
+
+function rollBreadName() {
+    const input = document.getElementById('name-input');
+    input.value = generateBreadName();
+    input.focus();
+}
+
+// The server re-labels your notes and votes; then everything re-renders
+function requestRename(name) {
+    if (!socket.connected) {
+        userName = name;
+        rememberName(name);
+        renderName();
+        return;
+    }
+    socket.emit('renameRetro', { name }, ({ name: accepted }) => {
+        userName = accepted;
+        rememberName(accepted);
+        renderName();
+        cards.forEach(card => upsertCard(card));
+        toast(`You're now ${accepted} 👋`);
+    });
+}
+
+document.getElementById('name-input').addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeNameForm();
+});
+document.getElementById('name-form').addEventListener('focusout', event => {
+    // Clicking away saves, unless focus moved to the form's own buttons
+    if (!event.currentTarget.contains(event.relatedTarget)) saveName();
+});
 
 function toast(message) {
     const container = document.getElementById('toast-container');
@@ -322,7 +405,7 @@ function updateSurfaceHeights() {
         const columnBottom = bottoms.get(surface.dataset.column);
         const top = worldOffset(surface).y;
         const needed = columnBottom ? columnBottom - top + 400 : 0;
-        surface.style.height = `${Math.max(900, needed)}px`;
+        surface.style.height = `${Math.max(1600, needed)}px`;
         surface.querySelector('.column-empty').classList.toggle('hidden', Boolean(columnBottom));
     }
     const columns = document.getElementById('board');
@@ -1021,7 +1104,9 @@ function renderHeaders(headers) {
 // ---------- Drawing on the board ----------
 
 const DRAW_COLORS = ['#111827', '#ffffff', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
-const DRAW_SIZES = [3, 7, 14]; // on-screen pixels, so pens feel the same at any zoom
+// Pen sizes are on-screen pixels, so a pen feels the same at any zoom
+const MIN_PEN_SIZE = 1;
+const MAX_PEN_SIZE = 60;
 const drawLayer = document.getElementById('draw-layer');
 const drawing = {
     active: false,
@@ -1029,7 +1114,7 @@ const drawing = {
     strokes: [], // { color, size, erase, points: [[x, y], ...] } in world pixels
     current: null,
     color: DRAW_COLORS[2],
-    size: DRAW_SIZES[1],
+    size: 6,
     eraser: false
 };
 
@@ -1049,23 +1134,9 @@ function buildDrawTools() {
         });
         colors.appendChild(swatch);
     }
-    const sizes = document.getElementById('draw-sizes');
-    for (const size of DRAW_SIZES) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'size-btn';
-        button.dataset.size = size;
-        button.setAttribute('aria-label', `Pen size ${size}`);
-        const dot = document.createElement('span');
-        dot.style.width = `${size + 2}px`;
-        dot.style.height = `${size + 2}px`;
-        button.appendChild(dot);
-        button.addEventListener('click', () => {
-            drawing.size = size;
-            renderDrawTools();
-        });
-        sizes.appendChild(button);
-    }
+    document.getElementById('draw-size').addEventListener('input', event => {
+        setPenSize(Number(event.target.value));
+    });
     renderDrawTools();
 
     drawLayer.addEventListener('pointerdown', event => {
@@ -1101,6 +1172,11 @@ function buildDrawTools() {
     document.addEventListener('keydown', event => {
         if (!drawing.active) return;
         if (event.key === 'Escape') cancelDrawing();
+        // [ and ] shrink and grow the pen, like most drawing apps
+        if (event.key === '[' || event.key === ']') {
+            const step = drawing.size < 10 ? 1 : 4;
+            setPenSize(drawing.size + (event.key === ']' ? step : -step));
+        }
         if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey)) {
             event.preventDefault();
             undoStroke();
@@ -1112,10 +1188,18 @@ function renderDrawTools() {
     document.querySelectorAll('#draw-colors .swatch').forEach(swatch => {
         swatch.classList.toggle('selected', !drawing.eraser && swatch.dataset.color === drawing.color);
     });
-    document.querySelectorAll('#draw-sizes .size-btn').forEach(button => {
-        button.classList.toggle('selected', Number(button.dataset.size) === drawing.size);
-    });
+    document.getElementById('draw-size').value = drawing.size;
+    document.getElementById('draw-size-value').textContent = `${drawing.size}px`;
+    const preview = document.getElementById('draw-size-preview');
+    preview.style.setProperty('--pen-dot', `${drawing.eraser ? drawing.size * 3 : drawing.size}px`);
+    preview.style.setProperty('--pen-color', drawing.color);
+    preview.classList.toggle('erasing', drawing.eraser);
     document.getElementById('draw-eraser').classList.toggle('active', drawing.eraser);
+}
+
+function setPenSize(size) {
+    drawing.size = Math.min(MAX_PEN_SIZE, Math.max(MIN_PEN_SIZE, Math.round(size)));
+    renderDrawTools();
 }
 
 function sizeDrawLayer() {
@@ -1340,11 +1424,16 @@ function updateParticipantsList() {
 }
 
 // Socket event handlers
+let greeted = false;
 socket.on('connect', () => {
     console.log('Connected to server, joining room:', roomId);
     socket.emit('joinRetro', { room: roomId, name: userName });
     document.getElementById('loading-overlay').style.display = 'none';
     updateRoomDisplay();
+    if (!savedName && !greeted) {
+        greeted = true;
+        toast(`🍞 You're ${userName} - click your name to change it`);
+    }
 });
 
 socket.on('disconnect', () => {

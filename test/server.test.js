@@ -643,6 +643,34 @@ describe('retro', () => {
     assert.equal(instance.retroRooms.get('RETRO2').cards.length, 0);
   });
 
+  test('renames a participant along with their notes and votes', async () => {
+    const socket = await joinRetro(instance.url, 'RETRO-NAME', 'Anon Bagel');
+    const cardId = await addCard(socket, { column: 'kudos' });
+    const submitted = waitFor(socket, 'cardUpserted', ({ card }) => card.isSubmitted);
+    socket.emit('submitCard', { cardId, content: 'Thanks for the reviews!' });
+    await submitted;
+    socket.emit('voteCard', { cardId });
+    await waitFor(socket, 'cardUpserted', ({ card }) => card.votes === 1);
+
+    socket.emit('renameRetro', { name: '<b>' + 'x'.repeat(60) });
+    const participants = waitFor(socket, 'updateParticipants', (p) =>
+      p.participants.includes('Jordan')
+    );
+    const reloaded = waitFor(socket, 'loadCards');
+    const ack = await new Promise((resolve) =>
+      socket.emit('renameRetro', { name: '  Jordan ' }, resolve)
+    );
+    assert.deepEqual(ack, { name: 'Jordan' });
+    assert.deepEqual((await participants).participants, ['Jordan']);
+    const [card] = (await reloaded).cards;
+    assert.equal(card.author, 'Jordan');
+    assert.deepEqual(card.voters, ['Jordan']);
+
+    // Voting again now toggles the renamed vote off rather than adding one
+    socket.emit('voteCard', { cardId });
+    assert.equal((await waitFor(socket, 'cardUpserted')).card.votes, 0);
+  });
+
   test('removes participants when they disconnect', async () => {
     const owl = await joinRetro(instance.url, 'RETRO3', 'Anon Owl');
     const wolf = await joinRetro(instance.url, 'RETRO3', 'Anon Wolf');
