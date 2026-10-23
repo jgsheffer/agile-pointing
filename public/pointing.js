@@ -10,63 +10,89 @@ socket.on('connect_error', (error) => {
   }
 });
 
+const DECKS = {
+  fibonacci: [1, 2, 3, 5, 8, 13, '?', '☕', 'Pass'],
+  tshirt: ['XS', 'S', 'M', 'L', 'XL', '?', '☕', 'Pass'],
+};
+const SPECIAL_VOTES = ['?', '☕', 'Pass'];
+const REACTIONS = ['🎉', '👍', '🤔', '😂', '☕', '🔥', '❤️', '👀', '🚀', '😱'];
+const prefersReducedMotion = window.matchMedia(
+  '(prefers-reduced-motion: reduce)'
+).matches;
+
 // Update the currentRoom initialization to use URL parameters
 let currentRoom = new URLSearchParams(window.location.search).get('room') || '';
 let selectedAvatar = '';
 let selectedAvatarType = 'emoji';
 let sessionId = localStorage.getItem('sessionId');
+let myParticipantId = null;
 // Details sent with the last joinRoom, used to rejoin after a reconnect
 let joinedWith = null;
 // Avatars are only sent when the participant list changes, so keep them by id
 const avatarCache = new Map();
-const emojis = ['😀', '😎', '🤓', '🦄', '🐱', '🐶', '🦊', '🐸', '🐼', '🐯'];
-const fibonacciSequence = [1, 2, 3, 5, 8, 13, 'Pass'];
+const participantElements = new Map();
+// Latest room state from the server
+let roomState = null;
+let renderedDeck = null;
+let roundHistory = [];
 
 const AVATAR_SIZE = 128;
 const MAX_GIF_SIZE = 256 * 1024; // GIFs are sent as-is to keep the animation
 
-// Initialize audio context and sound effect
-let voteSound = null;
-let audioContext = null;
+// Used when GIPHY isn't configured or doesn't answer
+const letsTalkGifs = [
+  'https://i.giphy.com/tbEjpqYUbeGyZtIcES.webp',
+  'https://i.giphy.com/01u3Rw1zQLSylw2Tn9.webp',
+  'https://i.giphy.com/l0HlvtIPzPdt2usKs.webp',
+  'https://i.giphy.com/l0HlKrB02QY0f1mbm.webp',
+];
 
-function initAudio() {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    // Create and cache the audio object
-    voteSound = new Audio(
-      'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAA<TRUNCATED>'
-    );
-    voteSound.volume = 0.2;
-  }
-}
+const celebrationGifs = [
+  'https://i.giphy.com/3o7TKDxSkF9iGiCJri.webp',
+  'https://i.giphy.com/g9582DNuQppxC.webp',
+  'https://i.giphy.com/YTbZzCkRQCEJa.webp',
+  'https://i.giphy.com/11sBLVxNs7v6WA.webp',
+  'https://i.giphy.com/26tOZ42Mg6pbTUPHW.webp',
+  'https://i.giphy.com/26u4lOMA8JKSnL9Uk.webp',
+  'https://i.giphy.com/l0MYt5jPR6QX5pnqM.webp',
+  'https://i.giphy.com/3oz8xRF0v9WMAUVLNK.webp',
+  'https://i.giphy.com/26gsspfbt1HfVQ9va.webp',
+  'https://i.giphy.com/l0MYJnJQ4EiYLxvQ4.webp',
+  'https://i.giphy.com/26u4cqiYI30juCOGY.webp',
+  'https://i.giphy.com/26tPplGWjN0xLybiU.webp',
+  'https://i.giphy.com/3o7TKNcbfKa8f2Zkuk.webp',
+];
 
-// Initialize audio on first user interaction
-document.addEventListener(
-  'click',
-  function () {
-    initAudio();
-  },
-  { once: true }
-);
+const FALLBACK_GIFS = {
+  celebrate: celebrationGifs,
+  legendary: celebrationGifs,
+  talk: letsTalkGifs,
+  coffee: [],
+};
 
-// Avatar handling functions
+const randomItem = (list) => list[Math.floor(Math.random() * list.length)];
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+// ---------- Avatars ----------
+
 function switchAvatarMode(mode) {
   selectedAvatarType = mode;
   document.querySelectorAll('.avatar-section').forEach((section) => {
-    section.classList.add('hidden');
+    section.classList.toggle('hidden', section.dataset.section !== mode);
   });
-  document.querySelector(`[data-section="${mode}"]`).classList.remove('hidden');
 
   document.querySelectorAll('.avatar-mode-btn').forEach((btn) => {
-    if (btn.dataset.mode === mode) {
-      btn.classList.add('selected');
-    } else {
-      btn.classList.remove('selected');
-    }
+    const selected = btn.dataset.mode === mode;
+    btn.classList.toggle('selected', selected);
+    btn.setAttribute('aria-selected', String(selected));
   });
 
   if (mode === 'dicebear') {
     regenerateAvatar();
+  } else if (mode === 'emoji') {
+    selectedAvatar = document.querySelector('.emoji-option.selected')?.dataset.emoji ?? '';
+  } else if (mode === 'custom') {
+    selectedAvatar = localStorage.getItem('customAvatarData') ?? '';
   }
 }
 
@@ -78,6 +104,7 @@ function regenerateAvatar() {
   const img = document.getElementById('dicebear-image');
   img.src = avatarUrl;
   selectedAvatar = avatarUrl;
+  selectedAvatarType = 'dicebear';
 }
 
 function readAsDataURL(file) {
@@ -165,231 +192,284 @@ async function handleCustomAvatarUpload(event) {
   }
 }
 
-// Add event listener for file upload
 document
   .getElementById('avatar-upload')
   ?.addEventListener('change', handleCustomAvatarUpload);
-const voteOptions = [1, 2, 3, 5, 8, 13, 'Pass'];
 
-const letsTalkGifs = [
-  'https://i.giphy.com/tbEjpqYUbeGyZtIcES.webp',
-  'https://i.giphy.com/01u3Rw1zQLSylw2Tn9.webp',
-  'https://i.giphy.com/l0HlvtIPzPdt2usKs.webp',
-  'https://i.giphy.com/l0HlKrB02QY0f1mbm.webp',
-];
+// ---------- Emoji picker ----------
 
-const celebrationGifs = [
-  'https://i.giphy.com/3o7TKDxSkF9iGiCJri.webp',
-  'https://i.giphy.com/g9582DNuQppxC.webp',
-  'https://i.giphy.com/YTbZzCkRQCEJa.webp',
-  'https://i.giphy.com/11sBLVxNs7v6WA.webp',
-  'https://i.giphy.com/26tOZ42Mg6pbTUPHW.webp',
-  'https://i.giphy.com/26u4lOMA8JKSnL9Uk.webp',
-  'https://i.giphy.com/l0MYt5jPR6QX5pnqM.webp',
-  'https://i.giphy.com/3oz8xRF0v9WMAUVLNK.webp',
-  'https://i.giphy.com/26gsspfbt1HfVQ9va.webp',
-  'https://i.giphy.com/l0MYJnJQ4EiYLxvQ4.webp',
-  'https://i.giphy.com/26u4cqiYI30juCOGY.webp',
-  'https://i.giphy.com/26tPplGWjN0xLybiU.webp',
-  'https://i.giphy.com/3o7TKNcbfKa8f2Zkuk.webp',
-]; // Initial setup
-function populateEmojiGrid() {
-  const emojiGrid = document.getElementById('emoji-grid');
-  emojis.forEach((emoji) => {
-    const div = document.createElement('div');
-    div.className = 'emoji-option';
-    div.textContent = emoji;
-    div.onclick = () => selectEmoji(emoji);
-    emojiGrid.appendChild(div);
+let emojiCategory = 0;
+
+function renderEmojiTabs() {
+  const tabs = document.getElementById('emoji-tabs');
+  tabs.innerHTML = '';
+  EMOJI_CATEGORIES.forEach((category, index) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'emoji-tab';
+    tab.textContent = category.icon;
+    tab.title = category.name;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-label', category.name);
+    tab.addEventListener('click', () => {
+      emojiCategory = index;
+      document.getElementById('emoji-search').value = '';
+      renderEmojiGrid();
+    });
+    tabs.appendChild(tab);
+  });
+}
+
+function renderEmojiGrid() {
+  const query = document.getElementById('emoji-search').value.trim().toLowerCase();
+  const emojis = query
+    ? EMOJI_CATEGORIES.flatMap((c) => c.emojis).filter(([, words]) =>
+        words.includes(query)
+      )
+    : EMOJI_CATEGORIES[emojiCategory].emojis;
+
+  document.querySelectorAll('.emoji-tab').forEach((tab, index) => {
+    const selected = !query && index === emojiCategory;
+    tab.classList.toggle('selected', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  });
+
+  const grid = document.getElementById('emoji-grid');
+  grid.innerHTML = '';
+  for (const [emoji, words] of emojis) {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'emoji-option';
+    option.dataset.emoji = emoji;
+    option.textContent = emoji;
+    option.title = words.split(' ')[0];
+    option.setAttribute('role', 'option');
+    option.addEventListener('click', () => selectEmoji(emoji));
+    grid.appendChild(option);
+  }
+  if (emojis.length === 0) {
+    grid.textContent = 'No matches - try another word';
+  }
+  markSelectedEmoji();
+}
+
+function markSelectedEmoji() {
+  document.querySelectorAll('.emoji-option').forEach((el) => {
+    const selected = selectedAvatarType === 'emoji' && el.dataset.emoji === selectedAvatar;
+    el.classList.toggle('selected', selected);
+    el.setAttribute('aria-selected', String(selected));
   });
 }
 
 function selectEmoji(emoji) {
   selectedAvatar = emoji;
   selectedAvatarType = 'emoji';
-  document.querySelectorAll('.emoji-option').forEach((el) => {
-    el.style.backgroundColor = el.textContent === emoji ? '#3700B3' : '#2c2c2c';
-  });
+  markSelectedEmoji();
 }
 
-// Room management
+document.getElementById('emoji-search').addEventListener('input', renderEmojiGrid);
+
+// ---------- Room management ----------
+
+function generateRoomId() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 function copyRoomLink() {
-  const roomLink = `${window.location.origin}${window.location.pathname}?room=${currentRoom}`;
+  const roomLink = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(currentRoom)}`;
   navigator.clipboard.writeText(roomLink).then(() => {
-    const copyButton = document.querySelector('.copy-button');
-    copyButton.textContent = 'check';
-    setTimeout(() => {
-      copyButton.textContent = 'content_copy';
-    }, 2000);
+    toast('🔗 Room link copied - share it with your team');
   });
 }
 
 function updateRoomHeader(roomId, show = true) {
-  const headerRoomInfo = document.getElementById('header-room-info');
-  const headerRoomId = document.getElementById('header-room-id');
-
-  if (show) {
-    headerRoomInfo.classList.remove('hidden');
-    headerRoomId.textContent = roomId;
-  } else {
-    headerRoomInfo.classList.add('hidden');
-    headerRoomId.textContent = '';
-  }
+  document.getElementById('header-room-info').classList.toggle('hidden', !show);
+  document.getElementById('header-room-id').textContent = show ? roomId : '';
+  document.getElementById('leave-btn').classList.toggle('hidden', !show);
+  document.getElementById('reaction-bar').classList.toggle('hidden', !show);
 }
 
 function joinRoom() {
   const name = document.getElementById('name').value.trim();
-  const room = (document.getElementById('room').value || currentRoom).trim();
-  if (name && room && selectedAvatar) {
-    if (!/^[\w -]{1,64}$/.test(room)) {
-      alert('Room IDs can only use letters, numbers, spaces, - and _.');
-      return;
-    }
-    // Update URL with room parameter
-    const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room)}`;
-    window.history.pushState({}, '', newUrl);
-    currentRoom = room;
-    joinedWith = {
-      room,
+  let room = (document.getElementById('room').value || currentRoom).trim();
+  if (!room) {
+    room = generateRoomId();
+    document.getElementById('room').value = room;
+  }
+  if (!name || !selectedAvatar) {
+    alert('Please enter your name and pick an avatar.');
+    return;
+  }
+  if (!/^[\w -]{1,64}$/.test(room)) {
+    alert('Room IDs can only use letters, numbers, spaces, - and _.');
+    return;
+  }
+
+  // Update URL with room parameter
+  const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room)}`;
+  window.history.pushState({}, '', newUrl);
+  if (room !== currentRoom || !joinedWith) clearVoteUI();
+  currentRoom = room;
+  joinedWith = {
+    room,
+    name,
+    avatar: selectedAvatar,
+    avatarType: selectedAvatarType,
+  };
+  socket.emit('joinRoom', { ...joinedWith, sessionId });
+  document.getElementById('join-form').classList.add('hidden');
+  document.getElementById('voting-area').classList.remove('hidden');
+  updateRoomHeader(room, true);
+  localStorage.setItem(
+    'pokerSession',
+    JSON.stringify({
       name,
+      room,
       avatar: selectedAvatar,
       avatarType: selectedAvatarType,
-    };
-    socket.emit('joinRoom', { ...joinedWith, sessionId });
-    document.getElementById('join-form').classList.add('hidden');
-    document.getElementById('voting-area').classList.remove('hidden');
-    updateRoomHeader(room, true);
-    localStorage.setItem(
-      'pokerSession',
-      JSON.stringify({
-        name,
-        room,
-        avatar: selectedAvatar,
-        avatarType: selectedAvatarType,
-      })
-    );
-  } else {
-    alert('Please enter your name, room ID, and select an avatar.');
-  }
+    })
+  );
 }
+
 function leaveRoom() {
   socket.emit('leaveRoom');
   currentRoom = '';
   joinedWith = null;
+  roomState = null;
+  myParticipantId = null;
   avatarCache.clear();
+  participantElements.clear();
+  document.getElementById('participants').innerHTML = '';
   clearVoteUI();
   document.getElementById('voting-area').classList.add('hidden');
   document.getElementById('join-form').classList.remove('hidden');
   updateRoomHeader('', false);
   localStorage.removeItem('pokerSession');
-  localStorage.removeItem('customAvatarData');
-  localStorage.removeItem('customAvatarType');
 }
 
-// Voting functionality
+['name', 'room'].forEach((id) => {
+  document.getElementById(id).addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') joinRoom();
+  });
+});
+
+// ---------- Voting ----------
+
 let currentVote = null;
 // Bumped on every reset so late async results from an earlier round are dropped
 let voteRound = 0;
+let resultsShownForRound = -1;
+
+const votingLocked = () => !roomState || roomState.revealed || roomState.revealing;
+const sameVote = (a, b) => a !== null && String(a) === String(b);
+
+function renderDeck(deck) {
+  renderedDeck = deck;
+  const container = document.getElementById('voting-buttons');
+  container.innerHTML = '';
+  DECKS[deck].forEach((value, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'vote-button';
+    if (SPECIAL_VOTES.includes(value)) button.classList.add('special');
+    button.dataset.value = String(value);
+    button.textContent = value;
+    button.title =
+      value === '☕' ? 'I need a break' : value === '?' ? 'Not sure' : `Vote ${value}`;
+    if (index < 9) {
+      const shortcut = document.createElement('span');
+      shortcut.className = 'shortcut';
+      shortcut.textContent = index + 1;
+      shortcut.setAttribute('aria-hidden', 'true');
+      button.appendChild(shortcut);
+    }
+    button.addEventListener('click', () => vote(value));
+    container.appendChild(button);
+  });
+  updateDeckButtons();
+}
+
+function updateDeckButtons() {
+  const locked = votingLocked();
+  document.querySelectorAll('.vote-button').forEach((button) => {
+    const selected = sameVote(currentVote, button.dataset.value);
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+    button.disabled = locked;
+  });
+}
 
 function vote(value) {
+  if (votingLocked()) return;
   const previousVote = currentVote;
   currentVote = value;
+  updateDeckButtons();
+  Sound.click();
 
-  // Update UI to show selected vote with enhanced animations
-  document.querySelectorAll('.vote-button').forEach((button) => {
-    button.classList.remove('selected');
-    button.style.transform = 'scale(1)';
-
-    const buttonValue = button.textContent.trim();
-    if (
-      buttonValue == value ||
-      (typeof value === 'number' && parseInt(buttonValue) === value)
-    ) {
-      button.classList.add('selected');
-
-      // Add pop effect
-      button.style.transform = 'scale(1.15)';
-      setTimeout(() => {
-        button.style.transform = 'scale(1.1)';
-      }, 200);
-
-      // Add ripple effect
-      const ripple = document.createElement('div');
-      ripple.className = 'absolute inset-0 bg-white rounded-xl';
-      ripple.style.animation = 'ripple 0.6s linear';
-      button.appendChild(ripple);
-
-      setTimeout(() => ripple.remove(), 700);
-
-      // Add micro-confetti burst from the button
-      const rect = button.getBoundingClientRect();
-      const buttonCenterX = (rect.left + rect.right) / 2;
-      const buttonCenterY = rect.top;
-
-      confetti({
-        particleCount: 20,
-        spread: 30,
-        startVelocity: 20,
-        origin: {
-          x: buttonCenterX / window.innerWidth,
-          y: buttonCenterY / window.innerHeight,
-        },
-        colors: ['#60A5FA', '#3B82F6', '#2563EB'],
-        shapes: ['circle'],
-        scalar: 0.75,
-      });
-    }
-  });
-
-  // Add voting sound effect
-  const audio = new Audio(
-    'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  const button = document.querySelector(
+    `.vote-button[data-value="${CSS.escape(String(value))}"]`
   );
-  audio.volume = 0.2;
-  audio.play().catch(() => {}); // Browsers block sound until the user interacts
+  if (button && !prefersReducedMotion) {
+    // Add ripple effect
+    const ripple = document.createElement('div');
+    ripple.className = 'absolute inset-0 bg-white rounded-xl';
+    ripple.style.animation = 'ripple 0.6s linear';
+    button.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 700);
 
-  // If this is a new vote (not just deselecting), add some particle effects
-  if (previousVote !== value) {
-    const buttons = document.getElementById('voting-buttons');
-    const rect = buttons.getBoundingClientRect();
-    const centerX = (rect.left + rect.right) / 2;
-    const centerY = (rect.top + rect.bottom) / 2;
+    // Add micro-confetti burst from the button
+    const rect = button.getBoundingClientRect();
+    confetti({
+      particleCount: 20,
+      spread: 30,
+      startVelocity: 20,
+      origin: {
+        x: (rect.left + rect.right) / 2 / window.innerWidth,
+        y: rect.top / window.innerHeight,
+      },
+      colors: ['#60A5FA', '#3B82F6', '#A78BFA'],
+      shapes: ['circle'],
+      scalar: 0.75,
+      disableForReducedMotion: true,
+    });
 
-    // Create floating number particles
-    for (let i = 0; i < 3; i++) {
-      const particle = document.createElement('div');
-      particle.textContent = value;
-      particle.className =
-        'absolute text-2xl font-bold text-blue-400 pointer-events-none';
-      particle.style.left = `${centerX}px`;
-      particle.style.top = `${centerY}px`;
-      particle.style.transform = 'scale(0)';
-      particle.style.opacity = '0';
-      document.body.appendChild(particle);
-
-      // Random direction for each particle
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 100 + Math.random() * 50;
-      const destinationX = centerX + Math.cos(angle) * distance;
-      const destinationY = centerY + Math.sin(angle) * distance;
-
-      // Animate the particle
-      requestAnimationFrame(() => {
-        particle.style.transition = 'all 1s cubic-bezier(0.4, 0, 0.2, 1)';
-        particle.style.transform = 'scale(1)';
-        particle.style.opacity = '1';
-        particle.style.left = `${destinationX}px`;
-        particle.style.top = `${destinationY}px`;
-      });
-
-      // Remove the particle after animation
-      setTimeout(() => {
-        particle.style.opacity = '0';
-        setTimeout(() => particle.remove(), 1000);
-      }, 500);
-    }
+    if (previousVote !== value) spawnVoteParticles(button, value);
   }
+
   socket.emit('vote', { vote: value });
+}
+
+// Floating copies of the value drifting away from the button
+function spawnVoteParticles(button, value) {
+  const rect = button.getBoundingClientRect();
+  const centerX = (rect.left + rect.right) / 2 + window.scrollX;
+  const centerY = (rect.top + rect.bottom) / 2 + window.scrollY;
+  for (let i = 0; i < 3; i++) {
+    const particle = document.createElement('div');
+    particle.textContent = value;
+    particle.className =
+      'absolute text-2xl font-bold text-blue-400 pointer-events-none';
+    particle.style.left = `${centerX}px`;
+    particle.style.top = `${centerY}px`;
+    particle.style.transform = 'scale(0)';
+    particle.style.opacity = '0';
+    particle.style.zIndex = '45';
+    document.body.appendChild(particle);
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 80 + Math.random() * 50;
+    requestAnimationFrame(() => {
+      particle.style.transition = 'all 1s cubic-bezier(0.4, 0, 0.2, 1)';
+      particle.style.transform = 'scale(1)';
+      particle.style.opacity = '1';
+      particle.style.left = `${centerX + Math.cos(angle) * distance}px`;
+      particle.style.top = `${centerY + Math.sin(angle) * distance}px`;
+    });
+    setTimeout(() => {
+      particle.style.opacity = '0';
+      setTimeout(() => particle.remove(), 1000);
+    }, 500);
+  }
 }
 
 function revealVotes() {
@@ -400,62 +480,139 @@ function resetVotes() {
   socket.emit('resetVotes');
 }
 
-// Random celebration GIF from GIPHY via the server, or one from the static list
-async function getCelebrationGif() {
-  try {
-    const response = await fetch('/api/celebration-gif');
-    if (response.ok) {
-      const { url } = await response.json();
-      if (url) return url;
-    }
-  } catch (error) {
-    console.error('Could not fetch a celebration GIF:', error);
+function onRevealButton() {
+  if (roomState?.revealed) {
+    resetVotes();
+  } else {
+    revealVotes();
   }
-  return celebrationGifs[Math.floor(Math.random() * celebrationGifs.length)];
 }
+
+function changeDeck(deck) {
+  if (roomState && deck !== roomState.deck) {
+    socket.emit('setDeck', { deck });
+  }
+}
+
+// Number keys pick cards, unless you're typing somewhere
+document.addEventListener('keydown', (event) => {
+  if (!roomState || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.target.closest('input, textarea, select')) return;
+  const index = Number(event.key) - 1;
+  const deck = DECKS[roomState.deck];
+  if (Number.isInteger(index) && index >= 0 && index < deck.length) {
+    vote(deck[index]);
+  }
+});
 
 // Clears this client's selection and results; runs for everyone on a reset
 function clearVoteUI() {
   voteRound++;
   currentVote = null;
-  document.querySelectorAll('.vote-button').forEach((button) => {
-    button.classList.remove('selected');
-    button.style.transform = 'scale(1)';
-  });
+  updateDeckButtons();
   document.getElementById('results').classList.add('hidden');
   document.getElementById('consensus').classList.add('hidden');
   document.getElementById('giphy-image').classList.add('hidden');
+  document.getElementById('countdown-overlay').classList.add('hidden');
 }
 
-function createIcon(name, className) {
-  const icon = document.createElement('span');
-  icon.className = `material-icons ${className}`;
-  icon.textContent = name;
-  return icon;
+// ---------- Story ----------
+
+let storyTimer = null;
+document.getElementById('story-input').addEventListener('input', (event) => {
+  clearTimeout(storyTimer);
+  storyTimer = setTimeout(() => {
+    storyTimer = null;
+    socket.emit('setStory', { story: event.target.value });
+  }, 300);
+});
+
+// ---------- Rendering room state ----------
+
+function renderState(state, { animateReveal = false } = {}) {
+  roomState = state;
+  if (state.deck !== renderedDeck) {
+    renderDeck(state.deck);
+  }
+  document.getElementById('deck-select').value = state.deck;
+
+  const storyInput = document.getElementById('story-input');
+  // Don't overwrite text that's being typed or is about to be sent
+  if (document.activeElement !== storyInput && !storyTimer) {
+    storyInput.value = state.story;
+  }
+
+  const me = state.participants.find((p) => p.id === myParticipantId);
+  if (me && !me.hasVoted) currentVote = null;
+  updateDeckButtons();
+
+  renderProgress(state);
+  renderRevealButton(state);
+  renderStreak(state.streak);
+  renderParticipants(state, animateReveal);
+
+  if (state.revealed && resultsShownForRound !== voteRound) {
+    resultsShownForRound = voteRound;
+    const flipTime = animateReveal ? state.participants.length * 150 + 600 : 0;
+    const round = voteRound;
+    setTimeout(() => {
+      if (round === voteRound) showResults(state, { celebrate: animateReveal });
+    }, flipTime);
+  }
+}
+
+function renderProgress(state) {
+  const online = state.participants.filter((p) => p.online || p.hasVoted);
+  const voted = online.filter((p) => p.hasVoted).length;
+  const text = document.getElementById('vote-progress-text');
+  text.textContent = state.revealed
+    ? `${plural(voted, 'vote')} revealed`
+    : `${voted} of ${online.length} voted`;
+  document.getElementById('vote-progress-bar').style.width =
+    online.length > 0 ? `${(voted / online.length) * 100}%` : '0%';
+}
+
+function renderRevealButton(state) {
+  const button = document.getElementById('reveal-btn');
+  const icon = button.querySelector('.material-icons');
+  const label = button.querySelector('.label');
+  const online = state.participants.filter((p) => p.online);
+  const everyoneVoted = online.length > 0 && online.every((p) => p.hasVoted);
+
+  button.disabled = state.revealing;
+  button.classList.toggle('ready', everyoneVoted && !state.revealed && !state.revealing);
+  if (state.revealing) {
+    icon.textContent = 'hourglass_top';
+    label.textContent = 'Revealing…';
+  } else if (state.revealed) {
+    icon.textContent = 'skip_next';
+    label.textContent = 'Next story';
+  } else {
+    icon.textContent = 'visibility';
+    label.textContent = everyoneVoted ? "Everyone's in - reveal!" : 'Reveal votes';
+  }
+  document.getElementById('reset-btn').classList.toggle('hidden', state.revealed);
+}
+
+function renderStreak(streak) {
+  const badge = document.getElementById('streak-badge');
+  badge.classList.toggle('hidden', streak < 2);
+  badge.textContent = `🔥 ${streak} in a row!`;
 }
 
 function createAvatarElement(avatar, avatarType) {
   const container = document.createElement('div');
-  container.className =
-    'flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300 overflow-hidden';
+  container.className = 'avatar';
 
   if (avatarType === 'emoji') {
     container.textContent = avatar;
   } else if (avatarType === 'dicebear' || avatarType === 'custom') {
     const img = document.createElement('img');
     img.src = avatar;
-    img.alt = 'Avatar';
-    img.className = 'w-full h-full object-cover';
-
-    // For GIFs, remove background gradient and adjust container
+    img.alt = '';
+    // For GIFs, remove background gradient so transparency shows
     if (avatarType === 'custom' && avatar.startsWith('data:image/gif;')) {
-      container.classList.remove(
-        'bg-gradient-to-br',
-        'from-blue-400',
-        'to-purple-500'
-      );
-      container.classList.add('bg-transparent');
-      img.className = 'w-full h-full object-contain';
+      container.classList.add('transparent');
       img.style.imageRendering = 'auto';
     }
     container.appendChild(img);
@@ -463,249 +620,483 @@ function createAvatarElement(avatar, avatarType) {
   return container;
 }
 
-function updateParticipantList({ participants, revealed }) {
-  const participantsDiv = document.getElementById('participants');
-  participantsDiv.innerHTML = '';
-  participants.forEach((p) => {
+function createParticipantElement(id) {
+  const div = document.createElement('div');
+  div.className = 'participant modern-card entering';
+  div.dataset.id = id;
+  div.addEventListener('animationend', (event) => {
+    if (event.animationName === 'enter') div.classList.remove('entering');
+    if (event.animationName === 'wiggle') div.classList.remove('wiggle');
+  });
+
+  const info = document.createElement('div');
+  info.className = 'min-w-0';
+  const name = document.createElement('div');
+  name.className = 'participant-name';
+  const tag = document.createElement('div');
+  tag.className = 'participant-tag';
+  info.append(name, tag);
+
+  const slot = document.createElement('div');
+  slot.className = 'vote-slot';
+  const flipper = document.createElement('div');
+  flipper.className = 'flipper';
+  const front = document.createElement('div');
+  front.className = 'face front';
+  const back = document.createElement('div');
+  back.className = 'face back';
+  flipper.append(front, back);
+  slot.appendChild(flipper);
+
+  const nudge = document.createElement('button');
+  nudge.type = 'button';
+  nudge.className = 'nudge-btn';
+  nudge.textContent = '👉 nudge';
+  nudge.addEventListener('click', () => sendNudge(id));
+
+  div.append(document.createElement('div'), info, slot, nudge);
+  return div;
+}
+
+function updateParticipantElement(div, p, state, flipDelay) {
+  const { avatar = '', avatarType } = avatarCache.get(p.id) ?? {};
+  const avatarKey = `${avatarType}:${avatar.length}:${avatar.slice(-32)}`;
+  if (div.dataset.avatarKey !== avatarKey) {
+    div.dataset.avatarKey = avatarKey;
+    div.firstElementChild.replaceWith(createAvatarElement(avatar, avatarType));
+  }
+
+  const isMe = p.id === myParticipantId;
+  div.classList.toggle('is-me', isMe);
+  div.classList.toggle('voted', p.hasVoted);
+  div.classList.toggle('offline', !p.online);
+  div.querySelector('.participant-name').textContent = p.name;
+  div.querySelector('.participant-tag').textContent = [
+    isMe && 'You',
+    !p.online && 'Away',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const front = div.querySelector('.face.front');
+  const frontState = p.hasVoted ? 'voted' : 'thinking';
+  if (front.dataset.state !== frontState) {
+    front.dataset.state = frontState;
+    front.innerHTML = '';
+    if (p.hasVoted) {
+      const icon = document.createElement('span');
+      icon.className = 'material-icons text-green-400 text-4xl';
+      icon.textContent = 'check_circle';
+      front.appendChild(icon);
+    } else {
+      const thinking = document.createElement('span');
+      thinking.className = 'thinking';
+      thinking.append(...Array.from({ length: 3 }, () => document.createElement('span')));
+      front.appendChild(thinking);
+    }
+  }
+  front.setAttribute('aria-label', p.hasVoted ? 'Voted' : 'Still thinking');
+
+  const back = div.querySelector('.face.back');
+  const results = state.results;
+  back.textContent = p.vote ?? '';
+  back.classList.toggle('small', String(p.vote ?? '').length > 2);
+  back.classList.toggle('is-low', Boolean(results?.low.some((v) => v.name === p.name)));
+  back.classList.toggle('is-high', Boolean(results?.high.some((v) => v.name === p.name)));
+
+  const flipper = div.querySelector('.flipper');
+  const shouldFlip = state.revealed && p.vote !== null;
+  if (!shouldFlip) {
+    flipper.classList.remove('flipped');
+  } else if (flipDelay === null) {
+    flipper.classList.add('flipped');
+  } else {
+    setTimeout(() => flipper.classList.add('flipped'), flipDelay);
+  }
+
+  const nudge = div.querySelector('.nudge-btn');
+  nudge.classList.toggle('hidden', isMe || p.hasVoted || !p.online || state.revealed);
+  nudge.setAttribute('aria-label', `Nudge ${p.name} to vote`);
+}
+
+function renderParticipants(state, animateReveal) {
+  const container = document.getElementById('participants');
+  const seen = new Set();
+  let flipIndex = 0;
+
+  state.participants.forEach((p) => {
     if (p.avatar !== undefined) {
       avatarCache.set(p.id, { avatar: p.avatar, avatarType: p.avatarType });
     }
-    const { avatar = '', avatarType } = avatarCache.get(p.id) ?? {};
-
-    const div = document.createElement('div');
-    div.className =
-      'participant modern-card p-6 flex items-center space-x-4 transform transition-all duration-300 hover:scale-105';
-
-    // Add a random animation delay for a staggered effect
-    const delay = Math.random() * 0.5;
-    div.style.animationDelay = `${delay}s`;
-
-    let voteStatus;
-    if (revealed && p.vote !== null) {
-      voteStatus = document.createElement('span');
-      voteStatus.className = 'text-2xl font-bold gradient-text';
-      voteStatus.textContent = p.vote;
-    } else if (p.hasVoted) {
-      voteStatus = createIcon('check_circle', 'text-green-400 animate-pulse');
-    } else {
-      voteStatus = createIcon('help_outline', 'text-gray-400 float-animation');
+    seen.add(p.id);
+    let div = participantElements.get(p.id);
+    if (!div) {
+      div = createParticipantElement(p.id);
+      participantElements.set(p.id, div);
     }
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'font-medium text-lg';
-    nameSpan.textContent = p.name;
-
-    const statusSpan = document.createElement('span');
-    statusSpan.className = 'ml-auto';
-    statusSpan.appendChild(voteStatus);
-
-    div.append(createAvatarElement(avatar, avatarType), nameSpan, statusSpan);
-
-    if (p.hasVoted) {
-      div.classList.add('voted');
-      // Add a subtle glow effect for voted participants
-      div.style.boxShadow = '0 0 15px rgba(74, 222, 128, 0.2)';
-    }
-
-    participantsDiv.appendChild(div);
+    const flipDelay =
+      animateReveal && p.vote !== null ? flipIndex++ * 150 : null;
+    updateParticipantElement(div, p, state, flipDelay);
+    // appendChild moves existing nodes, keeping the server's order
+    container.appendChild(div);
   });
 
-  // Add entrance animation for new participants
-  const allParticipants = participantsDiv.querySelectorAll('.participant');
-  allParticipants.forEach((participant, index) => {
-    participant.style.opacity = '0';
-    participant.style.transform = 'translateY(20px)';
-    setTimeout(() => {
-      participant.style.opacity = '1';
-      participant.style.transform = 'translateY(0)';
-    }, index * 100);
-  });
+  for (const [id, div] of participantElements) {
+    if (!seen.has(id)) {
+      div.remove();
+      participantElements.delete(id);
+    }
+  }
 }
 
-function calculateAndDisplayResults(participants) {
-  // Filter out Pass votes and null votes for average calculation
-  const numericVotes = participants
-    .map((p) => p.vote)
-    .filter((v) => v !== null && v !== 'Pass' && typeof v === 'number');
+// ---------- Results ----------
 
-  const average =
-    numericVotes.length > 0
-      ? numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length
-      : 0;
-
-  // Display average and count of numeric votes vs total votes
-  const totalVotes = participants.filter((p) => p.vote !== null).length;
-  const passVotes = participants.filter((p) => p.vote === 'Pass').length;
-
+function showResults(state, { celebrate }) {
+  const { results, streak } = state;
   const resultsDiv = document.getElementById('results');
-  const averageVoteSpan = document.getElementById('average-vote');
+  resultsDiv.classList.remove('hidden', 'show');
+  void resultsDiv.offsetWidth; // restart the entrance animation
+  resultsDiv.classList.add('show');
 
-  // Animate the average vote number counting up
-  const duration = 1500;
+  document.getElementById('suggested-vote').textContent = results.suggested ?? '-';
+  const averageWrap = document.getElementById('average-wrap');
+  averageWrap.classList.toggle('hidden', results.average === null);
+  if (results.average !== null) {
+    countUp(document.getElementById('average-vote'), results.average);
+  }
+
+  renderChart(results);
+  renderBreakdown(results);
+  renderCallout(results);
+
+  document.getElementById('consensus').classList.toggle('hidden', !results.consensus);
+
+  const mood = gifMood(results, streak);
+  showGif(mood);
+
+  if (!celebrate) return;
+  if (results.consensus) {
+    Sound.tada();
+    celebrateConsensus(state);
+  } else if (results.talk) {
+    Sound.hmm();
+  }
+}
+
+function countUp(element, value) {
+  if (prefersReducedMotion) {
+    element.textContent = value.toFixed(2);
+    return;
+  }
   const steps = 30;
-  const stepDuration = duration / steps;
-  let currentStep = 0;
+  let step = 0;
+  const interval = setInterval(() => {
+    step++;
+    element.textContent = ((value * step) / steps).toFixed(2);
+    if (step === steps) clearInterval(interval);
+  }, 40);
+}
 
-  const startValue = 0;
-  const endValue = parseFloat(average.toFixed(2));
+function renderChart(results) {
+  const chart = document.getElementById('vote-chart');
+  chart.innerHTML = '';
+  const max = Math.max(1, ...results.distribution.map((d) => d.count));
 
-  if (numericVotes.length > 0) {
-    const interval = setInterval(() => {
-      currentStep++;
-      const progress = currentStep / steps;
-      const currentValue = startValue + (endValue - startValue) * progress;
-      averageVoteSpan.textContent = currentValue.toFixed(2);
+  for (const { value, count } of results.distribution) {
+    const row = document.createElement('div');
+    row.className = 'chart-row';
+    row.classList.toggle('is-suggested', sameVote(value, results.suggested));
 
-      if (currentStep === steps) {
-        clearInterval(interval);
-        // Add a small bounce animation when done counting
-        averageVoteSpan.style.transform = 'scale(1.2)';
-        setTimeout(() => {
-          averageVoteSpan.style.transform = 'scale(1)';
-        }, 200);
-      }
-    }, stepDuration);
-  } else {
-    averageVoteSpan.textContent = 'N/A';
-  }
+    const label = document.createElement('span');
+    label.className = 'text-right';
+    label.textContent = value;
+    const track = document.createElement('div');
+    track.className = 'chart-bar-track';
+    const bar = document.createElement('div');
+    bar.className = 'chart-bar';
+    track.appendChild(bar);
+    const total = document.createElement('span');
+    total.className = 'text-gray-400';
+    total.textContent = count;
 
-  // Update results display to show vote breakdown with animation
-  const existingBreakdown = resultsDiv.querySelector('.vote-breakdown');
-  if (existingBreakdown) {
-    existingBreakdown.remove();
-  }
-
-  if (passVotes > 0) {
-    const breakdownDiv = document.createElement('div');
-    breakdownDiv.className =
-      'vote-breakdown text-lg text-gray-400 mt-4 opacity-0 transform translate-y-4';
-    breakdownDiv.textContent = `${numericVotes.length} numeric votes, ${passVotes} pass votes`;
-    resultsDiv.appendChild(breakdownDiv);
-
-    // Fade in animation
-    setTimeout(() => {
-      breakdownDiv.style.transition = 'all 0.5s ease-out';
-      breakdownDiv.style.opacity = '1';
-      breakdownDiv.style.transform = 'translateY(0)';
-    }, 100);
-  }
-
-  resultsDiv.classList.remove('hidden');
-
-  // Check for consensus only among numeric votes
-  const allSame =
-    numericVotes.length > 0 && numericVotes.every((v) => v === numericVotes[0]);
-
-  const consensusDiv = document.getElementById('consensus');
-  const giphyImage = document.getElementById('giphy-image');
-
-  if (allSame && numericVotes.length > 1) {
-    consensusDiv.classList.remove('hidden');
-
-    // Enhanced confetti effect
-    const duration = 3 * 1000;
-    const animationEnd = Date.now() + duration;
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
-
-    function randomInRange(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
-    const interval = setInterval(function () {
-      const timeLeft = animationEnd - Date.now();
-
-      if (timeLeft <= 0) {
-        return clearInterval(interval);
-      }
-
-      const particleCount = 50 * (timeLeft / duration);
-
-      // Create confetti from multiple origins
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-      });
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-      });
-    }, 250);
-
-    // Show celebration GIF with fade-in effect
-    const round = voteRound;
-    getCelebrationGif().then((url) => {
-      // Votes were reset while the GIF was loading
-      if (round !== voteRound) return;
-
-      giphyImage.src = url;
-      giphyImage.style.opacity = '0';
-      giphyImage.classList.remove('hidden');
-
-      setTimeout(() => {
-        giphyImage.style.transition = 'opacity 0.5s ease-in';
-        giphyImage.style.opacity = '1';
-      }, 100);
+    row.append(label, track, total);
+    chart.appendChild(row);
+    requestAnimationFrame(() => {
+      bar.style.width = `${(count / max) * 100}%`;
     });
-  } else {
-    consensusDiv.classList.add('hidden');
-
-    // Check for large vote spread only among numeric votes
-    if (numericVotes.length > 1) {
-      const minVote = Math.min(...numericVotes);
-      const maxVote = Math.max(...numericVotes);
-      const minIndex = fibonacciSequence.indexOf(minVote);
-      const maxIndex = fibonacciSequence.indexOf(maxVote);
-
-      if (maxIndex - minIndex > 2) {
-        // Show "let's talk" GIF with bounce effect
-        const randomIndex = Math.floor(Math.random() * letsTalkGifs.length);
-        giphyImage.src = letsTalkGifs[randomIndex];
-        giphyImage.style.transform = 'scale(0)';
-        giphyImage.classList.remove('hidden');
-
-        setTimeout(() => {
-          giphyImage.style.transition =
-            'transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
-          giphyImage.style.transform = 'scale(1)';
-        }, 100);
-      } else {
-        giphyImage.classList.add('hidden');
-      }
-    } else {
-      giphyImage.classList.add('hidden');
-    }
   }
 }
-function displayRandomGif() {
-  const randomIndex = Math.floor(Math.random() * letsTalkGifs.length);
-  const gifUrl = letsTalkGifs[randomIndex];
-  const giphyImage = document.getElementById('giphy-image');
-  giphyImage.src = gifUrl;
-  giphyImage.classList.remove('hidden');
+
+function renderBreakdown(results) {
+  const parts = [plural(results.counted, 'estimate')];
+  if (results.pass) parts.push(`${results.pass} ${results.pass === 1 ? 'pass' : 'passes'}`);
+  if (results.unsure) parts.push(`${results.unsure} unsure`);
+  if (results.coffee) parts.push(`${results.coffee} ☕`);
+  document.getElementById('vote-breakdown').textContent = parts.join(' · ');
 }
 
-// Session management
+function renderCallout(results) {
+  const callout = document.getElementById('results-callout');
+  callout.innerHTML = '';
+  const describe = (voters) => voters.map((v) => `${v.name} (${v.vote})`).join(', ');
+
+  if (results.talk) {
+    const line = document.createElement('p');
+    line.textContent = `🎤 ${describe(results.low)} and ${describe(results.high)}, you're up - tell us your thinking!`;
+    callout.appendChild(line);
+  }
+  if (results.coffee) {
+    const line = document.createElement('p');
+    line.textContent = `☕ ${results.coffee === 1 ? 'Someone could' : `${results.coffee} people could`} use a break.`;
+    callout.appendChild(line);
+  }
+  callout.classList.toggle('coffee', !results.talk && results.coffee > 0);
+  callout.classList.toggle('hidden', callout.childElementCount === 0);
+}
+
+function gifMood(results, streak) {
+  if (results.coffee > 0 && results.coffee >= results.total / 2) return 'coffee';
+  if (results.consensus) return streak >= 3 ? 'legendary' : 'celebrate';
+  if (results.talk) return 'talk';
+  return null;
+}
+
+// Random GIF from GIPHY via the server, or one from the static lists
+async function getGif(mood) {
+  try {
+    const response = await fetch(`/api/gif?mood=${mood}`);
+    if (response.ok) {
+      const { url } = await response.json();
+      if (url) return url;
+    }
+  } catch (error) {
+    console.error('Could not fetch a GIF:', error);
+  }
+  const fallback = FALLBACK_GIFS[mood];
+  return fallback.length > 0 ? randomItem(fallback) : null;
+}
+
+function showGif(mood) {
+  const giphyImage = document.getElementById('giphy-image');
+  giphyImage.classList.add('hidden');
+  if (!mood) return;
+
+  const round = voteRound;
+  getGif(mood).then((url) => {
+    // Votes were reset while the GIF was loading
+    if (round !== voteRound || !url) return;
+
+    giphyImage.src = url;
+    giphyImage.alt = mood === 'talk' ? "Let's talk" : 'Celebration';
+    giphyImage.style.opacity = '0';
+    giphyImage.classList.remove('hidden');
+    setTimeout(() => {
+      giphyImage.style.transition = 'opacity 0.5s ease-in';
+      giphyImage.style.opacity = '1';
+    }, 100);
+  });
+}
+
+// Confetti made of the agreeing voters' own emoji avatars, bigger with streaks
+function celebrateConsensus(state) {
+  const emojis = new Set(['🎉']);
+  for (const p of state.participants) {
+    const cached = avatarCache.get(p.id);
+    if (cached?.avatarType === 'emoji' && sameVote(p.vote, state.results.suggested)) {
+      emojis.add(cached.avatar);
+    }
+  }
+  const emojiShapes = [...emojis]
+    .slice(0, 8)
+    .map((text) => confetti.shapeFromText({ text, scalar: 2 }));
+
+  const intensity = 1 + Math.min(state.streak, 5) * 0.35;
+  const duration = Math.min(6000, 3000 + state.streak * 500);
+  const animationEnd = Date.now() + duration;
+  const defaults = {
+    startVelocity: 30,
+    spread: 360,
+    ticks: 70,
+    zIndex: 50,
+    disableForReducedMotion: true,
+  };
+  const randomInRange = (min, max) => Math.random() * (max - min) + min;
+
+  const interval = setInterval(() => {
+    const timeLeft = animationEnd - Date.now();
+    if (timeLeft <= 0) {
+      clearInterval(interval);
+      return;
+    }
+    const particleCount = 40 * intensity * (timeLeft / duration);
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+    });
+    confetti({
+      ...defaults,
+      particleCount: particleCount / 3,
+      shapes: emojiShapes,
+      scalar: 2,
+      origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+    });
+  }, 250);
+}
+
+// ---------- Countdown ----------
+
+function showCountdown(seconds) {
+  const overlay = document.getElementById('countdown-overlay');
+  if (seconds <= 0) return;
+  Sound.drumroll(seconds);
+  overlay.classList.remove('hidden');
+
+  const round = voteRound;
+  for (let i = 0; i < seconds; i++) {
+    setTimeout(() => {
+      if (round !== voteRound) return;
+      overlay.innerHTML = '';
+      const number = document.createElement('div');
+      number.className = 'countdown-number gradient-text';
+      number.textContent = seconds - i;
+      overlay.appendChild(number);
+    }, i * 1000);
+  }
+  setTimeout(() => overlay.classList.add('hidden'), seconds * 1000);
+}
+
+// ---------- Reactions & nudges ----------
+
+let lastReactionAt = 0;
+
+function renderReactionBar() {
+  const bar = document.getElementById('reaction-bar');
+  for (const emoji of REACTIONS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'reaction-btn';
+    button.textContent = emoji;
+    button.setAttribute('aria-label', `React with ${emoji}`);
+    button.addEventListener('click', () => sendReaction(emoji));
+    bar.appendChild(button);
+  }
+}
+
+function sendReaction(emoji) {
+  const now = Date.now();
+  if (now - lastReactionAt < 250) return;
+  lastReactionAt = now;
+  socket.emit('react', { emoji });
+}
+
+function spawnReaction(emoji, from) {
+  const layer = document.getElementById('reaction-layer');
+  const el = document.createElement('div');
+  el.className = 'floating-reaction';
+  el.style.left = `${10 + Math.random() * 80}%`;
+  el.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 120)}px`);
+  const icon = document.createElement('span');
+  icon.className = 'emoji';
+  icon.textContent = emoji;
+  const label = document.createElement('span');
+  label.className = 'from';
+  label.textContent = from;
+  el.append(icon, label);
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+let lastNudgeAt = 0;
+
+function sendNudge(targetId) {
+  const now = Date.now();
+  if (now - lastNudgeAt < 2000) {
+    toast('Give them a second 😄');
+    return;
+  }
+  lastNudgeAt = now;
+  socket.emit('nudge', { targetId });
+}
+
+function toast(message) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ---------- History ----------
+
+function renderHistory(history) {
+  roundHistory = history;
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  for (const round of history) {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    const estimate = document.createElement('span');
+    estimate.className = 'history-estimate';
+    estimate.textContent = round.suggested ?? '-';
+    const story = document.createElement('span');
+    story.className = 'flex-1 min-w-0 truncate';
+    story.textContent = round.story || 'Untitled story';
+    const meta = document.createElement('span');
+    meta.className = 'text-sm text-gray-400 whitespace-nowrap';
+    meta.textContent = `${round.consensus ? '🎉 ' : ''}${plural(round.votes, 'vote')} · ${new Date(round.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    item.append(estimate, story, meta);
+    list.appendChild(item);
+  }
+  document.getElementById('history-count').textContent = history.length
+    ? `(${history.length})`
+    : '';
+  document.getElementById('history-empty').classList.toggle('hidden', history.length > 0);
+  document.getElementById('copy-history-btn').classList.toggle('hidden', history.length === 0);
+}
+
+function copyHistory() {
+  const text = [...roundHistory]
+    .reverse()
+    .map((round) => `${round.story || 'Untitled story'}\t${round.suggested ?? '-'}`)
+    .join('\n');
+  navigator.clipboard.writeText(text).then(() => toast('📋 History copied'));
+}
+
+// ---------- Sound ----------
+
+function renderSoundToggle() {
+  const button = document.getElementById('sound-toggle');
+  button.querySelector('.material-icons').textContent = Sound.muted ? 'volume_off' : 'volume_up';
+  const label = Sound.muted ? 'Unmute sounds' : 'Mute sounds';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+}
+
+function toggleSound() {
+  Sound.toggle();
+  renderSoundToggle();
+  Sound.pop();
+}
+
+// ---------- Session management ----------
+
 function checkExistingSession() {
   const session = JSON.parse(localStorage.getItem('pokerSession'));
   if (session) {
     document.getElementById('name').value = session.name;
-    document.getElementById('room').value = session.room;
+    // A shared link's room wins over the one you were last in
+    document.getElementById('room').value = currentRoom || session.room;
 
     // Restore custom avatar if it exists
     const customAvatarData = localStorage.getItem('customAvatarData');
     const customAvatarType = localStorage.getItem('customAvatarType');
 
     if (session.avatarType === 'custom' && customAvatarData) {
-      // Restore custom avatar preview
       const img = document.getElementById('custom-image');
       img.src = customAvatarData;
-      selectedAvatar = customAvatarData;
-      selectedAvatarType = 'custom';
       document.getElementById('custom-preview').classList.remove('hidden');
-
-      // Switch to custom avatar mode
       switchAvatarMode('custom');
 
       // Handle GIF specific settings
@@ -716,20 +1107,20 @@ function checkExistingSession() {
     } else if (session.avatarType === 'emoji') {
       selectEmoji(session.avatar);
     } else if (session.avatarType === 'dicebear') {
-      selectedAvatar = session.avatar;
-      selectedAvatarType = 'dicebear';
-      const img = document.getElementById('dicebear-image');
-      img.src = session.avatar;
       switchAvatarMode('dicebear');
+      selectedAvatar = session.avatar;
+      document.getElementById('dicebear-image').src = session.avatar;
     }
 
     joinRoom();
   }
 }
 
-// Socket event handlers
-socket.on('sessionCreated', (newSessionId) => {
+// ---------- Socket event handlers ----------
+
+socket.on('joined', ({ sessionId: newSessionId, participantId }) => {
   sessionId = newSessionId;
+  myParticipantId = participantId;
   localStorage.setItem('sessionId', sessionId);
 });
 
@@ -745,38 +1136,47 @@ socket.io.on('reconnect', () => {
   }
 });
 
-socket.on('updateParticipants', (state) => {
-  updateParticipantList(state);
+// Updates for a room we just left can still be in flight
+const isCurrentRoom = (state) => joinedWith !== null && state.room === currentRoom;
+
+socket.on('roomState', (state) => {
+  if (isCurrentRoom(state)) renderState(state);
 });
 
-socket.on('updateVotes', (state) => {
-  updateParticipantList(state);
-});
+socket.on('revealCountdown', ({ seconds }) => showCountdown(seconds));
 
 socket.on('votesRevealed', (state) => {
-  updateParticipantList(state);
-  calculateAndDisplayResults(state.participants);
+  if (!isCurrentRoom(state)) return;
+  document.getElementById('countdown-overlay').classList.add('hidden');
+  renderState(state, { animateReveal: true });
 });
 
 socket.on('votesReset', (state) => {
+  if (!isCurrentRoom(state)) return;
   clearVoteUI();
-  updateParticipantList(state);
+  renderState(state);
 });
 
-// Input field effects
-document.querySelectorAll('.input-md').forEach((input) => {
-  input.addEventListener('focus', () => {
-    input.nextElementSibling.classList.remove('scale-x-0');
-    input.nextElementSibling.classList.add('scale-x-100');
-  });
-  input.addEventListener('blur', () => {
-    if (input.value === '') {
-      input.nextElementSibling.classList.remove('scale-x-100');
-      input.nextElementSibling.classList.add('scale-x-0');
-    }
-  });
+socket.on('history', renderHistory);
+
+socket.on('reaction', ({ emoji, from }) => spawnReaction(emoji, from));
+
+socket.on('nudge', ({ targetId, from }) => {
+  const card = participantElements.get(targetId);
+  if (card && !prefersReducedMotion) card.classList.add('wiggle');
+  if (targetId === myParticipantId) {
+    toast(`👉 ${from} nudged you - time to vote!`);
+    Sound.nudge();
+    navigator.vibrate?.(200);
+  }
 });
 
-// Initialize
-populateEmojiGrid();
+// ---------- Initialize ----------
+
+renderEmojiTabs();
+renderEmojiGrid();
+renderReactionBar();
+renderSoundToggle();
+switchAvatarMode('emoji');
+renderHistory([]);
 window.onload = checkExistingSession;

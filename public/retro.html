@@ -9,291 +9,137 @@
       rel="stylesheet"
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Patrick+Hand&display=swap"
       rel="stylesheet"
     />
     <link
       href="https://fonts.googleapis.com/icon?family=Material+Icons"
       rel="stylesheet"
     />
+    <link href="retro.css" rel="stylesheet" />
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.3/dragula.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <link
-      href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.3/dragula.min.css"
-      rel="stylesheet"
-    />
-    <style>
-      body {
-        font-family: 'Roboto', sans-serif;
-        background-color: #121212;
-        color: rgba(255, 255, 255, 0.87);
-        min-height: 100vh;
-      }
-
-      .card {
-        background-color: #1e1e1e;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2),
-          0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
-        transition: all 0.3s ease;
-      }
-
-      .card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2),
-          0 6px 8px 0 rgba(0, 0, 0, 0.14), 0 2px 12px 0 rgba(0, 0, 0, 0.12);
-      }
-
-      .column-drop-zone {
-        min-height: 200px;
-      }
-
-      textarea {
-        background-color: #2c2c2c;
-        color: rgba(255, 255, 255, 0.87);
-        border: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.42);
-        transition: border-bottom-color 0.3s;
-        resize: none;
-        min-height: 60px;
-      }
-
-      textarea:focus {
-        outline: none;
-        border-bottom-color: #bb86fc;
-      }
-
-      textarea::placeholder {
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      .md-btn {
-        text-transform: uppercase;
-        font-weight: 500;
-        letter-spacing: 1.25px;
-        transition: all 0.3s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-      }
-
-      .md-btn-primary {
-        background-color: #bb86fc;
-        color: #000;
-      }
-
-      .md-btn-primary:hover {
-        background-color: #3700b3;
-        color: #fff;
-      }
-
-      .md-btn-secondary {
-        background-color: #03dac6;
-        color: #000;
-      }
-
-      .md-btn-secondary:hover {
-        background-color: #018786;
-        color: #fff;
-      }
-
-      .vote-count {
-        transition: all 0.2s;
-        background-color: #3700b3;
-        color: #fff;
-      }
-
-      .vote-count:hover {
-        transform: scale(1.1);
-        background-color: #bb86fc;
-      }
-
-      .loading-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
-        color: white;
-        font-size: 1.5rem;
-      }
-
-      .add-card-btn {
-        background-color: #2c2c2c;
-        color: rgba(255, 255, 255, 0.87);
-        transition: all 0.3s;
-      }
-
-      .add-card-btn:hover {
-        background-color: #3700b3;
-        color: #fff;
-      }
-
-      .submit-button {
-        background-color: #03dac6;
-        color: #000;
-        transition: all 0.3s;
-      }
-
-      .submit-button:hover {
-        background-color: #018786;
-        color: #fff;
-      }
-
-      #timer-display {
-        font-family: 'Roboto Mono', monospace;
-        color: #bb86fc;
-        text-shadow: 0 0 10px rgba(187, 134, 252, 0.3);
-      }
-
-      .room-info {
-        background-color: #2c2c2c;
-        border-radius: 4px;
-        padding: 4px 12px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .header-card {
-        background-color: #1e1e1e;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-      }
-    </style>
   </head>
   <body>
     <div id="loading-overlay" class="loading-overlay">
       Connecting to session...
     </div>
 
-    <nav class="header-card fixed top-0 left-0 right-0 z-50">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="flex justify-between h-16">
-          <div class="flex items-center">
-            <span class="text-xl font-bold">OhayoDev Sprint Retro</span>
-            <div class="ml-4 room-info">
-              <span class="text-sm opacity-80">Room:</span>
-              <code
-                id="room-id-display"
-                class="text-sm font-mono text-purple-400"
-              ></code>
+    <nav class="app-header fixed top-0 left-0 right-0 z-50">
+      <div class="max-w-screen-2xl mx-auto px-4">
+        <div class="flex justify-between h-16 items-center gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="text-lg sm:text-xl font-bold whitespace-nowrap">
+              🗂️ OhayoDev<span class="hidden sm:inline"> Sprint Retro</span>
+            </span>
+            <div class="room-info">
+              <span class="text-sm opacity-80 hidden sm:inline">Room</span>
+              <code id="room-id-display" class="text-sm font-mono text-purple-300"></code>
               <button
+                type="button"
+                id="copy-link-btn"
                 onclick="copyRoomLink()"
-                class="material-icons text-sm opacity-60 hover:opacity-100 transition-opacity"
+                class="icon-btn"
+                title="Copy room link"
+                aria-label="Copy room link"
               >
-                content_copy
+                <span class="material-icons">link</span>
               </button>
             </div>
           </div>
 
-          <div class="flex items-center space-x-4">
-            <div id="participants-list" class="text-sm opacity-80"></div>
-            <span id="user-name" class="opacity-80"></span>
-            <a href="/" class="md-btn md-btn-primary px-4 py-2 rounded">
-              <span class="material-icons">arrow_back</span>
-              Agile Pointing
+          <div class="flex items-center gap-3 min-w-0">
+            <div id="participants-list" class="text-sm opacity-80 truncate hidden lg:block"></div>
+            <span id="user-name" class="opacity-80 whitespace-nowrap hidden sm:inline"></span>
+            <a href="/" class="md-btn md-btn-ghost px-3 py-2">
+              <span class="material-icons">style</span>
+              <span class="hidden sm:inline">Agile Pointing</span>
             </a>
           </div>
         </div>
       </div>
     </nav>
 
-    <div class="pt-20 px-4">
-      <div class="max-w-7xl mx-auto" id="retro-content">
-        <div class="card p-6 mb-6">
-          <div class="flex justify-between items-center mb-4">
+    <main class="pt-20 px-4 pb-10">
+      <div class="max-w-screen-2xl mx-auto" id="retro-content">
+        <div class="glass p-4 sm:p-6 mb-4">
+          <div class="flex flex-wrap justify-between items-center gap-4">
             <h1 class="text-2xl font-bold">Sprint Retrospective</h1>
-            <div class="flex space-x-4">
-              <button
-                onclick="downloadPDF()"
-                class="md-btn md-btn-secondary px-4 py-2 rounded"
-              >
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="pdf-btn" onclick="downloadPDF()" class="md-btn md-btn-ghost px-3 py-2">
                 <span class="material-icons">download</span>
-                Download PDF
+                PDF
               </button>
-              <button
-                onclick="resetRetro()"
-                class="md-btn md-btn-primary px-4 py-2 rounded"
-              >
+              <button type="button" onclick="resetRetro()" class="md-btn md-btn-ghost px-3 py-2">
                 <span class="material-icons">refresh</span>
-                Reset Retro
+                Reset
               </button>
-              <button
-                onclick="toggleTimer()"
-                id="timer-btn"
-                class="md-btn md-btn-secondary px-4 py-2 rounded"
-              >
+              <button type="button" onclick="toggleTimer()" id="timer-btn" class="md-btn md-btn-ghost px-3 py-2">
                 <span class="material-icons">timer</span>
                 Start Timer (5:00)
               </button>
-              <button
-                onclick="groupSimilarCards()"
-                class="md-btn md-btn-primary px-4 py-2 rounded"
-              >
+              <button type="button" onclick="groupSimilarCards()" class="md-btn md-btn-primary px-3 py-2">
                 <span class="material-icons">group_work</span>
                 Group Similar
               </button>
             </div>
           </div>
-          <div
-            id="timer-display"
-            class="text-2xl font-bold text-center mb-4 hidden"
-          ></div>
+          <div id="timer-display" class="text-2xl font-bold text-center mt-4 hidden"></div>
+
+          <div class="flex flex-wrap items-center gap-4 mt-5">
+            <span class="text-sm text-gray-300">Grab a sticky and drop it on the board:</span>
+            <div id="sticky-pad" class="flex flex-wrap gap-3" role="group" aria-label="Sticky note colors"></div>
+            <span class="text-xs text-gray-400">
+              Drop or paste images anywhere · ✏️ sketch from a column
+            </span>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <!-- What Went Well Column -->
-          <div class="card p-6">
-            <h2 class="text-xl font-bold text-green-400 mb-4">
-              What Went Well? 🎉
-            </h2>
-            <button
-              onclick="addCard('went-well')"
-              class="add-card-btn w-full p-2 rounded hover:bg-purple-700 transition mb-4"
-            >
-              + Add Card
-            </button>
-            <div id="went-well" class="column-drop-zone space-y-4"></div>
-          </div>
+        <div id="board" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+      </div>
+    </main>
 
-          <!-- What Could Be Improved Column -->
-          <div class="card p-6">
-            <h2 class="text-xl font-bold text-yellow-400 mb-4">
-              What Could Be Improved? 🤔
-            </h2>
-            <button
-              onclick="addCard('improve')"
-              class="add-card-btn w-full p-2 rounded hover:bg-purple-700 transition mb-4"
-            >
-              + Add Card
-            </button>
-            <div id="improve" class="column-drop-zone space-y-4"></div>
-          </div>
+    <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" multiple />
 
-          <!-- Action Items Column -->
-          <div class="card p-6">
-            <h2 class="text-xl font-bold text-blue-400 mb-4">
-              Action Items 📋
-            </h2>
-            <button
-              onclick="addCard('action-items')"
-              class="add-card-btn w-full p-2 rounded hover:bg-purple-700 transition mb-4"
-            >
-              + Add Card
+    <div id="sketch-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sketch-title">
+      <div class="modal p-4 sm:p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 id="sketch-title" class="text-xl font-bold">✏️ Sketch something</h2>
+          <button type="button" class="icon-btn" onclick="closeSketch()" aria-label="Close sketch pad">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <div id="sketch-colors" class="flex gap-2" role="group" aria-label="Pen color"></div>
+          <div id="sketch-sizes" class="flex gap-2" role="group" aria-label="Pen size"></div>
+          <button type="button" id="sketch-eraser" class="md-btn md-btn-ghost px-3 py-1" onclick="toggleEraser()">
+            <span class="material-icons">auto_fix_normal</span>Eraser
+          </button>
+          <button type="button" class="md-btn md-btn-ghost px-3 py-1" onclick="undoStroke()">
+            <span class="material-icons">undo</span>Undo
+          </button>
+          <button type="button" class="md-btn md-btn-ghost px-3 py-1" onclick="clearSketch()">
+            <span class="material-icons">delete_sweep</span>Clear
+          </button>
+        </div>
+        <canvas id="sketch-canvas" width="800" height="500" aria-label="Drawing area"></canvas>
+        <div class="flex flex-wrap justify-between items-center gap-3 mt-4">
+          <label class="text-sm text-gray-300 flex items-center gap-2">
+            Add to
+            <select id="sketch-column" class="bg-gray-800 rounded px-2 py-1"></select>
+          </label>
+          <div class="flex gap-2">
+            <button type="button" class="md-btn md-btn-ghost px-4 py-2" onclick="closeSketch()">Cancel</button>
+            <button type="button" id="sketch-save" class="md-btn md-btn-primary px-4 py-2" onclick="saveSketch()">
+              <span class="material-icons">push_pin</span>Pin to board
             </button>
-            <div id="action-items" class="column-drop-zone space-y-4"></div>
           </div>
         </div>
       </div>
     </div>
+
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
     <script src="retro.js"></script>
   </body>

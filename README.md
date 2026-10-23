@@ -9,27 +9,30 @@ A real-time collaborative application for agile teams, featuring Agile Pointing 
 ## Features
 
 ### Agile Pointing
-- Real-time story point estimation using Fibonacci sequence
+- Fibonacci (1–13) or T-shirt (XS–XL) decks, plus `?`, `☕` (break) and `Pass` cards
 - Hidden voting: the server only shares *who* has voted until votes are revealed
-- Visual consensus indicators with confetti and a random celebration GIF (via `GET /api/celebration-gif`, which caches GIPHY searches for an hour)
-- Emoji, generated (DiceBear) or custom image avatars
-- Participant status tracking
-- Room-based collaboration
+- Live "4 of 6 voted" progress; the Reveal button glows once everyone is in
+- 3-2-1 countdown with a drumroll, then cards flip over one by one
+- Results: suggested card, average, vote distribution chart and a callout for the lowest/highest voters on a wide spread
+- Consensus celebration: rainbow banner, confetti made of the voters' emoji avatars, a random GIPHY GIF and a "🔥 N in a row" streak that gets bigger each time
+- Shared story title and a round history you can copy at the end of the meeting
+- Emoji reactions that float across everyone's screen, and 👉 nudges for people who haven't voted
+- Emoji (searchable, by category), generated (DiceBear) or custom image avatars
+- Synthesized sound effects with a mute toggle, number-key shortcuts, reduced-motion support
+- Away indicator for disconnected participants
 
 ### Sprint Retrospective
-- Three-column retrospective board
-- Real-time card creation and editing
-- Voting system for prioritization
-- Drag-and-drop card organization
-- PDF export functionality
-- 5-minute discussion timer
-- Similar card grouping
+- Four free-form columns: What Went Well, What Could Be Improved, Action Items and Kudos
+- Drag colored sticky notes from the pad onto any spot on the board, and move them between columns
+- Drop, paste or upload images onto a column
+- Sketch pad (pen colors, sizes, eraser, undo) that pins drawings to the board
+- Voting, similar-note grouping, PDF export and a 5-minute timer
 
 ### Shared Features
 - Access code gate shared by both boards
 - Room-based collaboration with shareable links
 - Anonymous animal-based naming system (retro)
-- Dark theme with Material Design
+- Dark theme
 - Real-time participant tracking
 - Persistent sessions
 
@@ -50,8 +53,7 @@ A real-time collaborative application for agile teams, featuring Agile Pointing 
 
 ### Additional Libraries
 - jsPDF & html2canvas: PDF generation
-- Dragula: Drag-and-drop functionality
-- canvas-confetti: Consensus celebration
+- canvas-confetti: Consensus celebration (including emoji confetti)
 
 ## Project Structure
 ```plaintext
@@ -62,9 +64,13 @@ project-root/
 │   └── server.test.js      # node:test suite
 └── public/
     ├── index.html          # Agile Pointing interface + access code form
+    ├── styles.css          # Agile Pointing styles
     ├── access.js           # Access code check / submission
+    ├── emoji-data.js       # Avatar emoji picker data
+    ├── sounds.js           # WebAudio sound effects
     ├── pointing.js         # Agile Pointing logic
     ├── retro.html          # Retrospective interface
+    ├── retro.css           # Retrospective styles
     └── retro.js            # Retrospective logic
 ```
 
@@ -73,7 +79,7 @@ project-root/
 | Variable | Required | Description |
 |---|---|---|
 | `ACCESS_CODE` | Yes | Code users must enter. If unset, all access is denied. Changing it signs everyone out. |
-| `GIPHY_API_KEY` | No | Enables random celebration GIFs from GIPHY on consensus (get a free key at developers.giphy.com). Without it, a built-in list is used. |
+| `GIPHY_API_KEY` | No | Enables random GIFs from GIPHY for results (get a free key at developers.giphy.com). Without it, built-in lists are used. |
 | `PORT` | No | Port to listen on (default `3000`). |
 | `TRUST_PROXY` | No | Set to the number of proxies in front of the app (e.g. `1`) so rate limiting and secure cookies see the real client IP/protocol. |
 
@@ -86,29 +92,52 @@ project-root/
 
 The retro page redirects to `/?next=/retro.html?room=...` when access is missing and returns after the code is entered.
 
+## HTTP Endpoints
+
+All of these except the access endpoints require the access cookie.
+
+| Endpoint | Description |
+|---|---|
+| `GET /access-status` | `{ valid }` for the current cookie |
+| `POST /validate-access` | `{ accessCode }` → sets the access cookie |
+| `GET /api/gif?mood=` | Random GIPHY URL for `celebrate`, `legendary`, `talk` or `coffee` (cached for an hour), or `null` |
+| `POST /api/retro-images?room=` | Raw PNG/JPEG/WebP/GIF body, up to 1 MB → `{ id }`; 60 images / 30 MB per room |
+| `GET /api/retro-images/:id` | The uploaded image |
+
 ## Data Structures
 
 ### Server-Side Storage
 ```javascript
 // Agile Pointing Rooms
-// roomId -> { participants: Map<sessionId, participant>, revealed: boolean }
+// roomId -> { participants: Map<sessionId, participant>, revealed, revealing,
+//             story, deck, streak, results, history }
 const pointingRooms = new Map();
 
 // Retro Rooms
-// roomId -> { cards: Card[], participants: Map<socketId, name>, lastActivity }
+// roomId -> { cards: Card[], participants: Map<socketId, name>, lastActivity, zCounter }
 const retroRooms = new Map();
 
 // Sessions (pointing reconnects)
 // sessionId -> { room, socketId, disconnectedAt }
 const sessions = new Map();
+
+// Retro images, kept in memory and deleted with their card or room
+// imageId -> { room, buffer, contentType, createdAt, cardId }
+const retroImages = new Map();
 ```
 
-### Card Structure
+### Retro Item Structure
 ```javascript
 {
     id: string,              // generated by the server
-    content: string,         // up to 2000 characters
-    column: 'went-well' | 'improve' | 'action-items',
+    type: 'note' | 'image' | 'sketch',
+    content: string,         // notes only, up to 2000 characters
+    color: 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange',
+    imageId?: string,        // images and sketches
+    column: 'went-well' | 'improve' | 'action-items' | 'kudos',
+    x: number,               // 0-1 across the column, so layouts survive resizing
+    y: number,               // pixels from the top of the column
+    z: number,               // stacking order, raised on every move
     votes: number,
     author: string,
     voters: string[],
@@ -122,23 +151,30 @@ const sessions = new Map();
 Every event acts on the room the socket joined; room names sent with later events are ignored.
 
 ### Agile Pointing
-- `joinRoom` `{ room, name, avatar, avatarType, sessionId? }`
+- `joinRoom` `{ room, name, avatar, avatarType, sessionId? }` → `joined` `{ sessionId, participantId }` and `history`
 - `leaveRoom`
-- `vote` `{ vote }`: values outside `1, 2, 3, 5, 8, 13, Pass` are recorded as `Cheater`
-- `revealVotes`
-- `resetVotes`
+- `vote` `{ vote }`: values outside the room's deck are recorded as `Cheater`; ignored once the reveal starts
+- `revealVotes`: starts a 3 second `revealCountdown`, then `votesRevealed`
+- `resetVotes`: after a reveal, records the round in `history` and clears the story ("Next story")
+- `setStory` `{ story }` (up to 140 characters)
+- `setDeck` `{ deck: 'fibonacci' | 'tshirt' }` (clears votes)
+- `react` `{ emoji }` → `reaction` `{ emoji, from }` for one of 🎉 👍 🤔 😂 ☕ 🔥 ❤️ 👀 🚀 😱
+- `nudge` `{ targetId }` → `nudge` `{ targetId, from }`
 
-The server emits `updateParticipants`, `updateVotes`, `votesRevealed` and `votesReset`, each with `{ revealed, participants }`. Votes are `null` until revealed, and avatars are only included in `updateParticipants`.
+State arrives as `roomState`, `votesRevealed` and `votesReset`, each with `{ room, revealed, revealing, story, deck, streak, results, participants }`. Votes are `null` until revealed, avatars are only included when the participant list changes, and `results` holds the suggested card, average, distribution and low/high voters.
 
 ### Retrospective
 - `joinRetro` `{ room, name }`
-- `addCard` `{ column }` (acknowledged with the new card id)
+- `addCard` `{ column, color, x, y }` (acknowledged with the new card id)
+- `addImage` `{ imageId, type: 'image' | 'sketch', column, x, y }` after uploading
 - `submitCard` `{ cardId, content }`
 - `voteCard` `{ cardId }`
-- `deleteCard` `{ cardId }`
-- `moveCard` `{ cardId, newColumn }`
+- `deleteCard` `{ cardId }` (also deletes the image)
+- `moveCard` `{ cardId, column, x, y }`
 - `resetRetro`
 - `groupSimilarCards`
+
+Changes arrive as `cardUpserted` / `cardRemoved`, and the full board as `loadCards` on join, reset and grouping.
 
 ## Installation
 
@@ -183,32 +219,36 @@ Room IDs can use letters, numbers, spaces, `-` and `_` (up to 64 characters).
 3. Share the room link with participants
 
 ### Agile Pointing
-1. Enter your name and choose an avatar
-2. Vote on story points using Fibonacci numbers
-3. Reveal votes when everyone has voted
-4. Reset for next story
+1. Enter your name and choose an avatar (press Enter to join)
+2. Optionally type the story you're estimating
+3. Pick a card (or press its number key)
+4. Reveal votes when everyone has voted
+5. Talk through the results, then click "Next story"
 
 Custom avatars are cropped and resized to 128×128 in the browser. Animated GIFs are kept as-is and must be under 256 KB.
 
 ### Retrospective
-1. Add cards to appropriate columns
-2. Submit cards to make them visible to others
-3. Vote on cards for prioritization
-4. Use timer for timeboxed discussions
-5. Group similar cards to merge duplicates (and their votes)
-6. Export to PDF when complete
+1. Drag a sticky from the pad onto a column (or use ➕ on a column), type, then Submit (Ctrl+Enter)
+2. Drop, paste or upload images, or ✏️ sketch something and pin it
+3. Drag anything around the board, including into another column
+4. Vote on items for prioritization
+5. Use timer for timeboxed discussions
+6. Group similar notes to merge duplicates (and their votes)
+7. Export to PDF when complete
 
 ## Development Notes
 
 ### Persistence
 - In-memory storage only; everything is lost on restart
 - Disconnected pointing sessions are kept for 30 minutes so a refresh rejoins
-- Empty retro rooms are removed after 24 hours of inactivity
+- Empty retro rooms (and their images) are removed after 24 hours of inactivity
+- Uploaded images that are never placed on the board are removed after 10 minutes
 - Cleanup runs hourly
 
 ### Security
 - Access code enforced on the server for both HTTP and Socket.IO
-- All socket input is validated (room IDs, names, avatars, votes, columns, card content)
+- All socket input is validated (room IDs, names, avatars, votes, columns, colors, positions, card content)
+- Uploaded images are checked against their file signatures; SVG is not accepted
 - User content is rendered with `textContent` rather than HTML
 - Helmet sets a Content Security Policy and other security headers
 

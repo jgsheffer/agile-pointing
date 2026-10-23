@@ -8,428 +8,296 @@
       href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
       rel="stylesheet"
     />
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap"
       rel="stylesheet"
     />
     <link
       href="https://fonts.googleapis.com/icon?family=Material+Icons"
       rel="stylesheet"
     />
-    <style>
-      body {
-        font-family: 'Roboto', sans-serif;
-        background-color: #121212;
-        color: rgba(255, 255, 255, 0.87);
-      }
-
-      .card {
-        background-color: #1e1e1e;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2),
-          0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
-      }
-
-      .header-card {
-        background-color: #1e1e1e;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-      }
-
-      .emoji-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 10px;
-      }
-
-      .emoji-option {
-        font-size: 24px;
-        cursor: pointer;
-        transition: background-color 0.3s, box-shadow 0.3s;
-        background-color: #2c2c2c;
-        border-radius: 50%;
-        width: 48px;
-        height: 48px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .emoji-option:hover {
-        background-color: #3700b3;
-        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2),
-          0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
-      }
-
-      .vote-button {
-        width: 56px;
-        height: 56px;
-        font-size: 18px;
-        transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
-        box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2),
-          0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
-      }
-
-      .vote-button:hover {
-        box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
-          0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12);
-        transform: translateY(-2px);
-      }
-
-      .vote-button.selected {
-        background-color: #3700b3 !important;
-        transform: scale(1.1);
-      }
-
-      .participant {
-        transition: transform 0.3s;
-      }
-
-      .participant.voted {
-        transform: scale(1.02);
-      }
-
-      .md-btn {
-        text-transform: uppercase;
-        font-weight: 500;
-        letter-spacing: 1.25px;
-        transition: background-color 0.3s, box-shadow 0.3s;
-      }
-
-      .md-btn-primary {
-        background-color: #90caf9;
-        color: #000;
-      }
-
-      .md-btn-primary:hover {
-        background-color: #42a5f5;
-        color: #fff;
-      }
-
-      .md-btn-secondary {
-        background-color: #03dac6;
-        color: #000;
-      }
-
-      .md-btn-secondary:hover {
-        background-color: #018786;
-        color: #fff;
-      }
-
-      .md-btn-danger {
-        background-color: #cf6679;
-        color: #000;
-      }
-
-      .md-btn-danger:hover {
-        background-color: #a00037;
-        color: #fff;
-      }
-
-      .input-md {
-        background-color: #2c2c2c;
-        color: rgba(255, 255, 255, 0.87);
-        border: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.42);
-        transition: border-bottom-color 0.3s;
-      }
-
-      .input-md:focus {
-        border-bottom-color: #bb86fc;
-        outline: none;
-      }
-
-      .input-md::placeholder {
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      @keyframes rainbow {
-        0% {
-          color: violet;
-        }
-        14% {
-          color: indigo;
-        }
-        28% {
-          color: blue;
-        }
-        42% {
-          color: green;
-        }
-        57% {
-          color: yellow;
-        }
-        71% {
-          color: orange;
-        }
-        85% {
-          color: red;
-        }
-        100% {
-          color: violet;
-        }
-      }
-
-      .rainbow-text {
-        animation: rainbow 5s linear infinite;
-        font-size: 48px;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 20px;
-      }
-
-      #giphy-image {
-        max-width: 100%;
-        height: auto;
-        margin-top: 20px;
-        border-radius: 4px;
-      }
-
-      .room-info {
-        background-color: #2c2c2c;
-        border-radius: 4px;
-        padding: 4px 12px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .copy-button {
-        cursor: pointer;
-        transition: opacity 0.3s;
-      }
-
-      .copy-button:hover {
-        opacity: 0.8;
-      }
-    </style>
+    <link href="styles.css" rel="stylesheet" />
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   </head>
   <body>
-    <!-- New Header -->
-    <nav class="header-card fixed top-0 left-0 right-0 z-50">
+    <nav class="app-header fixed top-0 left-0 right-0 z-50">
       <div class="max-w-7xl mx-auto px-4">
-        <div class="flex justify-between h-16 items-center">
-          <div class="flex items-center space-x-4">
-            <span class="text-xl font-bold">OhayoDev Agile Pointing</span>
+        <div class="flex justify-between h-16 items-center gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="text-lg sm:text-xl font-bold whitespace-nowrap">
+              🃏 OhayoDev<span class="hidden sm:inline"> Agile Pointing</span>
+            </span>
             <div id="header-room-info" class="room-info hidden">
-              <span class="text-sm text-gray-300">Room:</span>
-              <code
-                id="header-room-id"
-                class="text-sm font-mono text-purple-400"
-              ></code>
-              <span
-                class="material-icons copy-button text-gray-400 text-sm"
+              <span class="text-sm text-gray-300 hidden sm:inline">Room</span>
+              <code id="header-room-id" class="text-sm font-mono"></code>
+              <button
+                type="button"
+                class="icon-btn copy-button"
                 onclick="copyRoomLink()"
-                >content_copy</span
+                title="Copy room link"
+                aria-label="Copy room link"
               >
+                <span class="material-icons text-base">link</span>
+              </button>
             </div>
           </div>
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <button
-              onclick="leaveRoom()"
-              class="md-btn md-btn-danger px-4 py-2 rounded"
+              type="button"
+              id="sound-toggle"
+              class="icon-btn"
+              onclick="toggleSound()"
+              title="Mute sounds"
+              aria-label="Mute sounds"
             >
-              <span class="material-icons mr-2">exit_to_app</span>Leave Room
+              <span class="material-icons">volume_up</span>
+            </button>
+            <a href="/retro.html" class="icon-btn" title="Sprint retro" aria-label="Sprint retro">
+              <span class="material-icons">dashboard</span>
+            </a>
+            <button
+              type="button"
+              id="leave-btn"
+              onclick="leaveRoom()"
+              class="md-btn md-btn-danger px-3 py-2 hidden"
+            >
+              <span class="material-icons">logout</span>
+              <span class="hidden sm:inline">Leave</span>
             </button>
           </div>
         </div>
       </div>
     </nav>
 
-    <div class="min-h-screen pt-16 flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
-      <div id="access-form" class="modern-card p-8 max-w-md mx-auto backdrop-blur-lg" style="display: none;">
-        <h2 class="gradient-text text-3xl font-bold mb-6 text-center float-animation">Enter Access Code</h2>
+    <main class="min-h-screen pt-24 pb-28 px-4">
+      <div
+        id="access-form"
+        class="modern-card p-8 max-w-md mx-auto mt-16"
+        style="display: none"
+      >
+        <h2 class="gradient-text text-3xl font-bold mb-6 text-center float-animation">
+          Enter Access Code
+        </h2>
         <div class="mb-6">
-          <div class="relative">
-            <input
-              type="password"
-              id="access-code-input"
-              class="w-full p-3 bg-transparent border-2 border-blue-400 rounded-lg focus:outline-none focus:border-blue-500 text-white placeholder-blue-300 transition-all duration-300"
-              placeholder="Enter access code"
-            />
-            <div class="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-400 to-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"></div>
-          </div>
+          <label for="access-code-input" class="sr-only">Access code</label>
+          <input
+            type="password"
+            id="access-code-input"
+            class="text-input"
+            placeholder="Enter access code"
+            autocomplete="off"
+          />
         </div>
         <button
+          type="button"
           onclick="submitAccessCode()"
-          class="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg p-3 hover:from-blue-600 hover:to-purple-600 transform hover:scale-105 transition-all duration-300 font-semibold"
+          class="md-btn md-btn-primary w-full p-3"
         >
-          <span class="flex items-center justify-center">
-            <span class="material-icons mr-2">lock_open</span>
-            Submit
-          </span>
+          <span class="material-icons">lock_open</span>
+          Submit
         </button>
       </div>
-      
-      <div id="main-content" style="display: none;">
-        <div id="app" class="container mx-auto p-4">
+
+      <div id="main-content" style="display: none">
         <!-- Join Form -->
-        <div id="join-form" class="modern-card p-8 max-w-md mx-auto backdrop-blur-lg">
-          <h2 class="gradient-text text-3xl font-bold mb-8 text-center pulse-animation">
+        <div id="join-form" class="modern-card p-6 sm:p-8 max-w-md mx-auto">
+          <h2 class="gradient-text text-3xl font-bold mb-6 text-center pulse-animation">
             Join Agile Pointing
           </h2>
-          <div class="mb-6">
-            <div class="relative">
+          <div class="space-y-4 mb-6">
+            <div>
+              <label for="name" class="sr-only">Your name</label>
               <input
                 type="text"
                 id="name"
                 maxlength="40"
-                placeholder="Your Name"
-                class="w-full p-3 bg-transparent border-2 border-blue-400 rounded-lg focus:outline-none focus:border-blue-500 text-white placeholder-blue-300 transition-all duration-300"
+                placeholder="Your name"
+                class="text-input"
+                autocomplete="nickname"
               />
-              <div class="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-400 to-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"></div>
             </div>
-          </div>
-          <div class="mb-6">
-            <div class="relative">
+            <div>
+              <label for="room" class="sr-only">Room ID</label>
               <input
                 type="text"
                 id="room"
-                placeholder="Room ID"
-                value="DEX-1"
-                class="w-full p-3 bg-transparent border-2 border-blue-400 rounded-lg focus:outline-none focus:border-blue-500 text-white placeholder-blue-300 transition-all duration-300"
+                maxlength="64"
+                placeholder="Room ID (leave blank for a new room)"
+                class="text-input"
               />
-              <div class="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-400 to-purple-500 transform scale-x-0 transition-transform duration-300 origin-left"></div>
             </div>
           </div>
-          <div class="mb-8">
-            <p class="mb-4 text-lg font-medium gradient-text">Choose your avatar:</p>
-            <div class="mb-4">
-              <div class="flex space-x-4 mb-4">
-                <button onclick="switchAvatarMode('emoji')" class="avatar-mode-btn md-btn md-btn-primary px-4 py-2 rounded" data-mode="emoji">Emoji</button>
-                <button onclick="switchAvatarMode('dicebear')" class="avatar-mode-btn md-btn md-btn-primary px-4 py-2 rounded" data-mode="dicebear">Generated Avatar</button>
-                <button onclick="switchAvatarMode('custom')" class="avatar-mode-btn md-btn md-btn-primary px-4 py-2 rounded" data-mode="custom">Custom Image</button>
-              </div>
-              <div id="emoji-grid" class="emoji-grid avatar-section" data-section="emoji"></div>
-              <div id="dicebear-options" class="hidden avatar-section" data-section="dicebear">
-                <div class="mb-4">
-                  <label class="block text-sm font-medium text-gray-300 mb-2">Style:</label>
-                  <select id="avatar-style" class="w-full p-2 bg-gray-700 rounded text-white">
-                    <option value="avataaars">Human</option>
-                    <option value="bottts">Robot</option>
-                    <option value="pixel-art">Pixel Art</option>
-                    <option value="identicon">Abstract</option>
-                  </select>
-                </div>
-                <div class="mb-4">
-                  <button onclick="regenerateAvatar()" class="md-btn md-btn-secondary px-4 py-2 rounded w-full">
-                    <span class="material-icons mr-2">refresh</span>Generate New
-                  </button>
-                </div>
-                <div id="dicebear-preview" class="w-24 h-24 mx-auto bg-gray-700 rounded-lg overflow-hidden">
-                  <img id="dicebear-image" class="w-full h-full object-cover" alt="Generated avatar">
-                </div>
-              </div>
-              <div id="custom-upload" class="hidden avatar-section" data-section="custom">
-                <div class="mb-4">
-                  <input type="file" id="avatar-upload" accept="image/*, .gif" class="hidden">
-                  <button onclick="document.getElementById('avatar-upload').click()" class="md-btn md-btn-secondary px-4 py-2 rounded w-full">
-                    <span class="material-icons mr-2">upload</span>Upload Image
-                  </button>
-                </div>
-                <div id="custom-preview" class="w-24 h-24 mx-auto bg-gray-700 rounded-lg overflow-hidden hidden">
-                  <img id="custom-image" class="w-full h-full object-cover" alt="Custom avatar">
-                </div>
-              </div>
+
+          <p class="mb-3 text-lg font-medium gradient-text">Choose your avatar</p>
+          <div class="flex gap-2 mb-4" role="tablist" aria-label="Avatar type">
+            <button type="button" onclick="switchAvatarMode('emoji')" class="avatar-mode-btn" data-mode="emoji" role="tab">Emoji</button>
+            <button type="button" onclick="switchAvatarMode('dicebear')" class="avatar-mode-btn" data-mode="dicebear" role="tab">Generated</button>
+            <button type="button" onclick="switchAvatarMode('custom')" class="avatar-mode-btn" data-mode="custom" role="tab">Custom</button>
+          </div>
+
+          <div class="avatar-section" data-section="emoji">
+            <label for="emoji-search" class="sr-only">Search emojis</label>
+            <input
+              type="search"
+              id="emoji-search"
+              class="text-input mb-3"
+              placeholder="Search emojis (fox, pizza, rocket…)"
+            />
+            <div id="emoji-tabs" class="emoji-tabs" role="tablist" aria-label="Emoji categories"></div>
+            <div id="emoji-grid" class="emoji-grid" role="listbox" aria-label="Emojis"></div>
+          </div>
+
+          <div class="hidden avatar-section" data-section="dicebear">
+            <label for="avatar-style" class="block text-sm font-medium text-gray-300 mb-2">Style</label>
+            <select id="avatar-style" class="text-input mb-3" onchange="regenerateAvatar()">
+              <option value="avataaars">Human</option>
+              <option value="bottts">Robot</option>
+              <option value="pixel-art">Pixel Art</option>
+              <option value="fun-emoji">Fun Emoji</option>
+              <option value="identicon">Abstract</option>
+            </select>
+            <button type="button" onclick="regenerateAvatar()" class="md-btn md-btn-ghost px-4 py-2 w-full mb-3">
+              <span class="material-icons">casino</span>Roll a new one
+            </button>
+            <div class="w-24 h-24 mx-auto bg-gray-800 rounded-2xl overflow-hidden">
+              <img id="dicebear-image" class="w-full h-full object-cover" alt="Generated avatar" />
             </div>
           </div>
+
+          <div class="hidden avatar-section" data-section="custom">
+            <input type="file" id="avatar-upload" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
+            <button type="button" onclick="document.getElementById('avatar-upload').click()" class="md-btn md-btn-ghost px-4 py-2 w-full mb-3">
+              <span class="material-icons">upload</span>Upload image
+            </button>
+            <div id="custom-preview" class="w-24 h-24 mx-auto bg-gray-800 rounded-2xl overflow-hidden hidden">
+              <img id="custom-image" class="w-full h-full object-cover" alt="Custom avatar" />
+            </div>
+          </div>
+
           <button
+            type="button"
             onclick="joinRoom()"
-            class="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg p-3 hover:from-blue-600 hover:to-purple-600 transform hover:scale-105 transition-all duration-300 font-semibold"
+            class="md-btn md-btn-primary w-full p-3 mt-6 text-lg"
           >
-            <span class="flex items-center justify-center">
-              <span class="material-icons mr-2">group_add</span>
-              Join Room
-            </span>
+            <span class="material-icons">group_add</span>
+            Join Room
           </button>
         </div>
 
         <!-- Voting Area -->
-        <div id="voting-area" class="hidden">
-          <div class="modern-card p-8 mb-8 relative backdrop-blur-lg">
-            <button
-              onclick="resetVotes()"
-              class="absolute top-4 right-4 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-lg transform hover:scale-105 transition-all duration-300"
-            >
-              <span class="material-icons mr-2">refresh</span>Reset
-            </button>
+        <div id="voting-area" class="hidden max-w-6xl mx-auto space-y-6">
+          <section class="modern-card p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row gap-3 mb-5">
+              <div class="flex-1">
+                <label for="story-input" class="sr-only">Story being estimated</label>
+                <input
+                  type="text"
+                  id="story-input"
+                  maxlength="140"
+                  class="text-input"
+                  placeholder="What are we estimating? (optional, everyone sees this)"
+                />
+              </div>
+              <div class="sm:w-40">
+                <label for="deck-select" class="sr-only">Card deck</label>
+                <select id="deck-select" class="text-input" onchange="changeDeck(this.value)">
+                  <option value="fibonacci">Fibonacci</option>
+                  <option value="tshirt">T-shirt sizes</option>
+                </select>
+              </div>
+            </div>
 
             <div
               id="voting-buttons"
-              class="flex justify-center flex-wrap gap-6 mb-8"
-            >
-              <button
-                onclick="vote(1)"
-                class="vote-button bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl w-16 h-16 text-2xl font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
-              >
-                1
-              </button>
-              <button
-                onclick="vote(2)"
-                class="vote-button bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl w-16 h-16 text-2xl font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
-              >
-                2
-              </button>
-              <button
-                onclick="vote(3)"
-                class="vote-button bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl w-16 h-16 text-2xl font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
-              >
-                3
-              </button>
-              <button
-                onclick="vote(5)"
-                class="vote-button bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl w-16 h-16 text-2xl font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
-              >
-                5
-              </button>
-              <button
-                onclick="vote(8)"
-                class="vote-button bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl w-16 h-16 text-2xl font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
-              >
-                8
-              </button>
-              <button
-                onclick="vote(13)"
-                class="vote-button bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl w-16 h-16 text-2xl font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
-              >
-                13
-              </button>
-              <button
-                onclick="vote('Pass')"
-                class="vote-button bg-gradient-to-br from-gray-400 to-gray-600 text-white rounded-xl w-16 h-16 text-lg font-bold transform hover:scale-110 transition-all duration-300 shadow-lg hover:shadow-gray-500/50"
-              >
-                Pass
-              </button>
+              class="flex justify-center flex-wrap gap-3 mb-6"
+              role="group"
+              aria-label="Your estimate"
+            ></div>
+
+            <div class="max-w-md mx-auto mb-5">
+              <div class="flex justify-between text-sm text-gray-300 mb-2">
+                <span id="vote-progress-text" aria-live="polite"></span>
+                <span id="streak-badge" class="streak-badge hidden"></span>
+              </div>
+              <div class="progress-track">
+                <div id="vote-progress-bar" class="progress-bar"></div>
+              </div>
             </div>
 
-            <div class="flex justify-center">
-              <button
-                onclick="revealVotes()"
-                class="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-6 py-3 rounded-lg transform hover:scale-105 transition-all duration-300 font-semibold shadow-lg hover:shadow-purple-500/50"
-              >
-                <span class="material-icons mr-2">visibility</span>Reveal Votes
+            <div class="flex flex-wrap justify-center gap-3">
+              <button type="button" id="reveal-btn" class="md-btn md-btn-primary" onclick="onRevealButton()">
+                <span class="material-icons">visibility</span>
+                <span class="label">Reveal votes</span>
+              </button>
+              <button type="button" id="reset-btn" class="md-btn md-btn-ghost px-4 py-2" onclick="resetVotes()">
+                <span class="material-icons">restart_alt</span>
+                Clear votes
               </button>
             </div>
-          </div>
+          </section>
 
-          <div id="results" class="modern-card p-8 mb-8 text-center hidden backdrop-blur-lg">
-            <div class="relative">
-              <p class="text-2xl mb-4">Average Vote: <span id="average-vote" class="gradient-text text-3xl font-bold"></span></p>
-              <div id="consensus" class="rainbow-text text-5xl font-black mb-6 hidden">CONSENSUS! 🎉</div>
-              <img id="giphy-image" class="hidden mx-auto rounded-lg shadow-2xl transform transition-all duration-500 hover:scale-105" alt="Let's talk" />
+          <section id="results" class="results-panel modern-card p-6 hidden" aria-live="polite">
+            <div id="consensus" class="rainbow-text text-4xl sm:text-5xl text-center mb-4 hidden">
+              CONSENSUS! 🎉
             </div>
-          </div>
+            <div class="grid md:grid-cols-2 gap-6 items-center">
+              <div class="space-y-4">
+                <div class="flex items-center gap-6 flex-wrap">
+                  <div class="suggested-chip">
+                    <span class="text-xs uppercase tracking-wider text-gray-300">Suggested</span>
+                    <span id="suggested-vote" class="value gradient-text"></span>
+                  </div>
+                  <div id="average-wrap">
+                    <div class="text-xs uppercase tracking-wider text-gray-400">Average</div>
+                    <div id="average-vote" class="text-3xl font-bold"></div>
+                  </div>
+                </div>
+                <div id="vote-chart" class="space-y-2"></div>
+                <p id="vote-breakdown" class="text-sm text-gray-400"></p>
+                <div id="results-callout" class="callout hidden"></div>
+              </div>
+              <div class="flex justify-center">
+                <img id="giphy-image" class="hidden shadow-2xl" alt="" />
+              </div>
+            </div>
+          </section>
 
-          <div
-            id="participants"
-            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
-          ></div>
+          <section>
+            <div
+              id="participants"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            ></div>
+          </section>
+
+          <details id="history" class="modern-card p-4 sm:p-6">
+            <summary class="cursor-pointer font-semibold flex items-center gap-2">
+              <span class="material-icons">history</span>
+              Round history <span id="history-count" class="text-gray-400 font-normal"></span>
+            </summary>
+            <div class="mt-4">
+              <div id="history-list"></div>
+              <p id="history-empty" class="text-gray-400 text-sm">
+                Finished rounds show up here when you click “Next story”.
+              </p>
+              <button type="button" id="copy-history-btn" class="md-btn md-btn-ghost px-4 py-2 mt-4 hidden" onclick="copyHistory()">
+                <span class="material-icons">content_copy</span>
+                Copy as text
+              </button>
+            </div>
+          </details>
         </div>
       </div>
-    </div>
+    </main>
+
+    <div id="reaction-bar" class="reaction-bar hidden" role="group" aria-label="Send a reaction"></div>
+    <div id="reaction-layer" class="reaction-layer" aria-hidden="true"></div>
+    <div id="countdown-overlay" class="countdown-overlay hidden" aria-live="assertive"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
     <script src="access.js"></script>
+    <script src="emoji-data.js"></script>
+    <script src="sounds.js"></script>
     <script src="pointing.js"></script>
   </body>
 </html>
