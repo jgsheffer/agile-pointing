@@ -331,10 +331,11 @@ function updateSurfaceHeights() {
         const columnBottom = bottoms.get(surface.dataset.column);
         const top = worldOffset(surface).y;
         const needed = columnBottom ? columnBottom - top + 400 : 0;
-        surface.style.height = `${Math.max(1200, needed)}px`;
+        surface.style.height = `${Math.max(900, needed)}px`;
         surface.querySelector('.column-empty').classList.toggle('hidden', Boolean(columnBottom));
     }
-    world.style.width = `${Math.max(document.getElementById('board').offsetWidth + 96 + BOARD_MARGIN, right + BOARD_MARGIN)}px`;
+    const columns = document.getElementById('board');
+    world.style.width = `${Math.max(worldOffset(columns).x + columns.offsetWidth + BOARD_MARGIN, right + BOARD_MARGIN)}px`;
     world.style.height = `${Math.max(2400, bottom + BOARD_MARGIN)}px`;
 }
 
@@ -539,11 +540,14 @@ function loadAllCards(allCards) {
     allCards.forEach(card => upsertCard(card));
 }
 
-function addCard(column, position = freeSpot(column)) {
-    socket.emit('addCard', { ...position, color: selectedColor }, cardId => {
+// With no position the app picks a spot (and pans to it); a dropped note
+// keeps exactly the spot it was dropped on and the view stays put
+function addCard(column, position = null) {
+    const spot = position ?? freeSpot(column);
+    socket.emit('addCard', { ...spot, color: selectedColor }, cardId => {
         const el = cardElements.get(cardId);
         if (!el) return;
-        bringIntoView(el);
+        if (!position) bringIntoView(el);
         el.querySelector('textarea')?.focus({ preventScroll: true });
     });
 }
@@ -724,12 +728,16 @@ function setZoom(scale) {
     zoomAt(...viewportCenter(), scale / view.scale);
 }
 
-// Fit all columns across the screen, starting at the top of the board
+// Fit the columns plus a strip of open canvas on each side, so it's clear
+// there's room to put things outside the columns too
 function fitBoard() {
-    const width = document.getElementById('board').offsetWidth + 96;
+    const columns = document.getElementById('board');
+    const offset = worldOffset(columns);
+    const margin = 240;
+    const width = columns.offsetWidth + margin * 2;
     view.scale = clampZoom(Math.min(1, (viewport.clientWidth - 32) / width));
-    view.x = (viewport.clientWidth - width * view.scale) / 2;
-    view.y = 16;
+    view.x = (viewport.clientWidth - columns.offsetWidth * view.scale) / 2 - offset.x * view.scale;
+    view.y = 24 - (offset.y - 80) * view.scale;
     applyView();
 }
 
@@ -759,6 +767,17 @@ function initViewport() {
     } else {
         fitBoard();
     }
+
+    // The browser can scroll the (overflow: hidden) viewport itself, e.g. to
+    // show a text cursor; fold that into the pan so the board never jumps
+    viewport.addEventListener('scroll', () => {
+        if (viewport.scrollLeft === 0 && viewport.scrollTop === 0) return;
+        view.x -= viewport.scrollLeft;
+        view.y -= viewport.scrollTop;
+        viewport.scrollLeft = 0;
+        viewport.scrollTop = 0;
+        applyView();
+    });
 
     // The scroll wheel zooms (trackpad pinches arrive as ctrl+wheel)
     viewport.addEventListener('wheel', event => {
@@ -1224,6 +1243,16 @@ socket.on('connect_error', (error) => {
     }
     console.error('Socket error:', error);
     document.getElementById('loading-overlay').textContent = 'Connection error. Please refresh the page.';
+});
+
+// Reload when we reconnect to a restarted server so the page runs its latest code
+let knownBuildId = null;
+socket.on('serverInfo', ({ buildId }) => {
+    if (knownBuildId && knownBuildId !== buildId) {
+        window.location.reload();
+        return;
+    }
+    knownBuildId = buildId;
 });
 
 socket.on('loadCards', ({ cards: allCards }) => loadAllCards(allCards));

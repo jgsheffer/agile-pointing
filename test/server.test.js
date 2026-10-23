@@ -153,6 +153,20 @@ describe('access control', () => {
       assert.deepEqual(await status.json(), { valid: false });
     });
 
+    test('tells clients which server run they are talking to', async () => {
+      const first = await waitFor(connect(instance.url), 'serverInfo');
+      const again = await waitFor(connect(instance.url), 'serverInfo');
+      assert.equal(first.buildId, again.buildId);
+
+      const restarted = await startServer();
+      try {
+        const other = await waitFor(connect(restarted.url), 'serverInfo');
+        assert.notEqual(other.buildId, first.buildId);
+      } finally {
+        await stopServer(restarted);
+      }
+    });
+
     test('refuses socket connections without the access cookie', async () => {
       const socket = connect(instance.url, { cookie: 'accessCode=true' });
       const error = await waitFor(socket, 'connect_error');

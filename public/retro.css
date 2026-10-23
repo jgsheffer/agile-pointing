@@ -195,7 +195,7 @@ body {
   background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 1.5px);
   background-size: 28px 28px;
 }
-.board-columns { display: flex; gap: 48px; align-items: flex-start; }
+.board-columns { display: flex; gap: 48px; align-items: flex-start; width: max-content; margin-left: 400px; margin-top: 160px; }
 /* Notes, images and sketches float above the columns anywhere on the board */
 .items-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
 .items-layer > .board-item { pointer-events: auto; }
@@ -241,7 +241,7 @@ body {
 
 .column-surface {
   position: relative;
-  min-height: 1200px;
+  min-height: 900px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.02);
   transition: background-color 0.2s, box-shadow 0.2s;

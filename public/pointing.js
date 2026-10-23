@@ -1122,6 +1122,16 @@ function checkExistingSession() {
 
 // ---------- Socket event handlers ----------
 
+// Reload when we reconnect to a restarted server so the page runs its latest code
+let knownBuildId = null;
+socket.on('serverInfo', ({ buildId }) => {
+  if (knownBuildId && knownBuildId !== buildId) {
+    window.location.reload();
+    return;
+  }
+  knownBuildId = buildId;
+});
+
 socket.on('joined', ({ sessionId: newSessionId, participantId }) => {
   sessionId = newSessionId;
   myParticipantId = participantId;

@@ -247,6 +247,7 @@ Custom avatars are cropped and resized to 128×128 in the browser. Animated GIFs
 
 ### Persistence
 - In-memory storage only; everything is lost on restart
+- Open pages reload themselves when they reconnect to a restarted server, so nobody keeps running old code
 - Disconnected pointing sessions are kept for 30 minutes so a refresh rejoins
 - Empty retro rooms (and their images) are removed after 24 hours of inactivity
 - Uploaded images that are never placed on the board are removed after 10 minutes

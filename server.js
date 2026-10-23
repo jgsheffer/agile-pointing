@@ -352,6 +352,9 @@ function createServer({
 } = {}) {
   const app = express();
   const server = http.createServer(app);
+  // Changes on every start; pages that reconnect to a newer server reload so
+  // nobody keeps running old code (room data doesn't survive a restart anyway)
+  const buildId = crypto.randomUUID();
   const io = new Server(server, { maxHttpBufferSize: MAX_SOCKET_MESSAGE });
 
   if (!accessCode) {
@@ -672,6 +675,7 @@ function createServer({
 
   io.on('connection', (socket) => {
     console.log('New client connected', socket.id);
+    socket.emit('serverInfo', { buildId });
     socket.data.pointing = null; // { room, sessionId }
     socket.data.retro = null; // { room, name }
     socket.data.lastReaction = 0;
