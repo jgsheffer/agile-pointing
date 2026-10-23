@@ -620,7 +620,7 @@ describe('retro', () => {
     socket.emit('resizeCard', { cardId: noteId, w: 5000, h: 10 });
     assert.deepEqual(
       (({ w, h }) => ({ w, h }))((await resized).card),
-      { w: 1600, h: 80 }
+      { w: 4000, h: 80 }
     );
 
     const { body } = await upload('RETRO-SIZE');
@@ -697,9 +697,10 @@ describe('retro', () => {
     assert.equal(status, 201);
 
     const placed = waitFor(socket, 'cardUpserted');
-    socket.emit('addImage', { imageId: body.id, type: 'sketch', column: 'kudos', x: 0.1, y: 40 });
+    socket.emit('addImage', { imageId: body.id, type: 'sketch', column: 'kudos', x: 0.1, y: 40, w: 9000 });
     const { card } = await placed;
     assert.equal(card.type, 'sketch');
+    assert.equal(card.w, 4000);
     assert.equal(card.imageId, body.id);
     assert.equal(card.isSubmitted, true);
 

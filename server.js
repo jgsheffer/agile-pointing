@@ -32,7 +32,7 @@ const MAX_CARDS_PER_ROOM = 500;
 const MAX_BOARD_SIZE = 20000;
 const MIN_ITEM_WIDTH = 120;
 const MIN_ITEM_HEIGHT = 80;
-const MAX_ITEM_SIZE = 1600;
+const MAX_ITEM_SIZE = 4000; // doodles drawn on the board can be wide
 const MAX_AVATAR_LENGTH = 360 * 1024; // ~256KB image once base64 encoded
 const MAX_SOCKET_MESSAGE = 512 * 1024;
 
@@ -984,6 +984,8 @@ function createServer({
           type: payload.type,
           imageId: payload.imageId,
           isSubmitted: true,
+          // Doodles arrive at the size they were drawn
+          w: clamp(payload.w, MIN_ITEM_WIDTH, MAX_ITEM_SIZE, null),
           ...placement(roomData, payload),
         });
         image.cardId = card.id;

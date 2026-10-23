@@ -74,6 +74,10 @@
         </div>
         <div id="timer-display" class="text-2xl font-bold hidden"></div>
         <div class="flex flex-wrap gap-2 ml-auto">
+          <button type="button" id="draw-btn" onclick="startDrawing()" class="md-btn md-btn-ghost px-3 py-2">
+            <span class="material-icons">brush</span>
+            <span class="hidden sm:inline">Draw</span>
+          </button>
           <button type="button" onclick="resetRetro()" class="md-btn md-btn-ghost px-3 py-2">
             <span class="material-icons">refresh</span>
             <span class="hidden sm:inline">Reset</span>
@@ -94,6 +98,24 @@
           <div id="board" class="board-columns"></div>
           <div id="items-layer" class="items-layer"></div>
         </div>
+        <canvas id="draw-layer" class="draw-layer hidden" aria-label="Drawing layer"></canvas>
+        <div id="draw-toolbar" class="draw-toolbar hidden" role="toolbar" aria-label="Drawing tools">
+          <div id="draw-colors" class="flex gap-2" role="group" aria-label="Pen color"></div>
+          <div id="draw-sizes" class="flex gap-2" role="group" aria-label="Pen size"></div>
+          <button type="button" id="draw-eraser" class="md-btn md-btn-ghost px-3 py-1" onclick="toggleEraser()">
+            <span class="material-icons">auto_fix_normal</span>Eraser
+          </button>
+          <button type="button" class="icon-btn" onclick="undoStroke()" title="Undo (Ctrl+Z)" aria-label="Undo">
+            <span class="material-icons">undo</span>
+          </button>
+          <button type="button" class="icon-btn" onclick="clearDrawing()" title="Clear" aria-label="Clear drawing">
+            <span class="material-icons">delete_sweep</span>
+          </button>
+          <button type="button" class="md-btn md-btn-ghost px-3 py-1" onclick="cancelDrawing()">Cancel</button>
+          <button type="button" id="draw-done" class="md-btn md-btn-primary px-3 py-1" onclick="finishDrawing()">
+            <span class="material-icons">check</span>Done drawing
+          </button>
+        </div>
         <div class="zoom-controls" role="group" aria-label="Zoom">
           <button type="button" class="icon-btn" onclick="zoomBy(1 / 1.25)" title="Zoom out (-)" aria-label="Zoom out">
             <span class="material-icons">remove</span>
@@ -112,43 +134,6 @@
 
     <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" multiple />
     <input type="file" id="header-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
-
-    <div id="sketch-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sketch-title">
-      <div class="modal p-4 sm:p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h2 id="sketch-title" class="text-xl font-bold">✏️ Sketch something</h2>
-          <button type="button" class="icon-btn" onclick="closeSketch()" aria-label="Close sketch pad">
-            <span class="material-icons">close</span>
-          </button>
-        </div>
-        <div class="flex flex-wrap items-center gap-3 mb-3">
-          <div id="sketch-colors" class="flex gap-2" role="group" aria-label="Pen color"></div>
-          <div id="sketch-sizes" class="flex gap-2" role="group" aria-label="Pen size"></div>
-          <button type="button" id="sketch-eraser" class="md-btn md-btn-ghost px-3 py-1" onclick="toggleEraser()">
-            <span class="material-icons">auto_fix_normal</span>Eraser
-          </button>
-          <button type="button" class="md-btn md-btn-ghost px-3 py-1" onclick="undoStroke()">
-            <span class="material-icons">undo</span>Undo
-          </button>
-          <button type="button" class="md-btn md-btn-ghost px-3 py-1" onclick="clearSketch()">
-            <span class="material-icons">delete_sweep</span>Clear
-          </button>
-        </div>
-        <canvas id="sketch-canvas" width="800" height="500" aria-label="Drawing area"></canvas>
-        <div class="flex flex-wrap justify-between items-center gap-3 mt-4">
-          <label class="text-sm text-gray-300 flex items-center gap-2">
-            Add to
-            <select id="sketch-column" class="bg-gray-800 rounded px-2 py-1"></select>
-          </label>
-          <div class="flex gap-2">
-            <button type="button" class="md-btn md-btn-ghost px-4 py-2" onclick="closeSketch()">Cancel</button>
-            <button type="button" id="sketch-save" class="md-btn md-btn-primary px-4 py-2" onclick="saveSketch()">
-              <span class="material-icons">push_pin</span>Pin to board
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
 

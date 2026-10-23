@@ -39,7 +39,7 @@ const DRAG_THRESHOLD = 4;
 const DEFAULT_ITEM_WIDTH = 220;
 const MIN_ITEM_WIDTH = 120;
 const MIN_ITEM_HEIGHT = 80;
-const MAX_ITEM_SIZE = 1600;
+const MAX_ITEM_SIZE = 4000;
 const BOARD_MARGIN = 800; // empty canvas kept beyond the furthest item
 
 // Core variables
@@ -124,10 +124,6 @@ function iconButton(icon, label, onClick) {
 
 function buildBoard() {
     const board = document.getElementById('board');
-    const anywhere = document.createElement('option');
-    anywhere.value = '';
-    anywhere.textContent = "Where I'm looking";
-    document.getElementById('sketch-column').appendChild(anywhere);
     for (const column of COLUMNS) {
         const section = document.createElement('section');
         section.className = 'board-column';
@@ -161,7 +157,7 @@ function buildBoard() {
         actions.append(
             iconButton('note_add', `Add a note to ${column.title}`, () => addCard(column.id)),
             iconButton('image', `Add an image to ${column.title}`, () => pickImages(column.id)),
-            iconButton('brush', `Sketch for ${column.title}`, () => openSketch(column.id)),
+            iconButton('brush', 'Draw on the board', () => startDrawing()),
             iconButton('wallpaper', `Set a header image for ${column.title}`, () => pickHeaderImage(column.id))
         );
         titleRow.append(title, actions);
@@ -179,11 +175,6 @@ function buildBoard() {
 
         section.append(header, surface);
         board.appendChild(section);
-
-        const option = document.createElement('option');
-        option.value = column.id;
-        option.textContent = column.title;
-        document.getElementById('sketch-column').appendChild(option);
     }
 
     const pad = document.getElementById('sticky-pad');
@@ -487,8 +478,16 @@ function renderNote(el, card) {
     el.appendChild(createFooter(card));
 }
 
+// A small tilt that stays the same for each photo
+function tiltFor(id) {
+    let hash = 0;
+    for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+    return ((Math.abs(hash) % 70) - 35) / 10; // -3.5deg .. 3.5deg
+}
+
 function renderMedia(el, card) {
     el.className = `board-item media ${card.type}`;
+    if (card.type === 'image') el.style.setProperty('--tilt', `${tiltFor(card.id)}deg`);
     let img = el.querySelector('img');
     if (!img) {
         el.innerHTML = '';
@@ -694,6 +693,7 @@ const clampZoom = scale => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
 
 function applyView() {
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    renderDrawing();
     document.getElementById('zoom-level').textContent = `${Math.round(view.scale * 100)}%`;
     try {
         localStorage.setItem(VIEW_KEY, JSON.stringify(view));
@@ -792,7 +792,7 @@ function initViewport() {
     let pinch = null;
 
     viewport.addEventListener('pointerdown', event => {
-        const onControl = event.target.closest('.board-item, .resize-handle, button, textarea, input, select, a, .zoom-controls');
+        const onControl = event.target.closest('.board-item, .resize-handle, button, textarea, input, select, a, .zoom-controls, .draw-toolbar');
         if (event.button === 2 || (event.button === 0 && onControl)) return;
         event.preventDefault();
         viewport.setPointerCapture(event.pointerId);
@@ -843,7 +843,6 @@ function initViewport() {
 
     document.addEventListener('keydown', event => {
         if (event.target.closest('textarea, input, select') || event.ctrlKey || event.metaKey || event.altKey) return;
-        if (!document.getElementById('sketch-modal').classList.contains('hidden')) return;
         if (event.key === '+' || event.key === '=') zoomBy(1.25);
         else if (event.key === '-' || event.key === '_') zoomBy(1 / 1.25);
         else if (event.key === '0') fitBoard();
@@ -1019,22 +1018,24 @@ function renderHeaders(headers) {
     }
 }
 
-// ---------- Sketch pad ----------
+// ---------- Drawing on the board ----------
 
-const SKETCH_COLORS = ['#111827', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
-const SKETCH_SIZES = [3, 7, 14];
-const sketch = {
-    canvas: document.getElementById('sketch-canvas'),
-    strokes: [],
+const DRAW_COLORS = ['#111827', '#ffffff', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+const DRAW_SIZES = [3, 7, 14]; // on-screen pixels, so pens feel the same at any zoom
+const drawLayer = document.getElementById('draw-layer');
+const drawing = {
+    active: false,
+    saving: false,
+    strokes: [], // { color, size, erase, points: [[x, y], ...] } in world pixels
     current: null,
-    color: SKETCH_COLORS[0],
-    size: SKETCH_SIZES[1],
+    color: DRAW_COLORS[2],
+    size: DRAW_SIZES[1],
     eraser: false
 };
 
-function buildSketchTools() {
-    const colors = document.getElementById('sketch-colors');
-    for (const color of SKETCH_COLORS) {
+function buildDrawTools() {
+    const colors = document.getElementById('draw-colors');
+    for (const color of DRAW_COLORS) {
         const swatch = document.createElement('button');
         swatch.type = 'button';
         swatch.className = 'swatch';
@@ -1042,14 +1043,14 @@ function buildSketchTools() {
         swatch.dataset.color = color;
         swatch.setAttribute('aria-label', `Pen color ${color}`);
         swatch.addEventListener('click', () => {
-            sketch.color = color;
-            sketch.eraser = false;
-            renderSketchTools();
+            drawing.color = color;
+            drawing.eraser = false;
+            renderDrawTools();
         });
         colors.appendChild(swatch);
     }
-    const sizes = document.getElementById('sketch-sizes');
-    for (const size of SKETCH_SIZES) {
+    const sizes = document.getElementById('draw-sizes');
+    for (const size of DRAW_SIZES) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'size-btn';
@@ -1060,124 +1061,240 @@ function buildSketchTools() {
         dot.style.height = `${size + 2}px`;
         button.appendChild(dot);
         button.addEventListener('click', () => {
-            sketch.size = size;
-            renderSketchTools();
+            drawing.size = size;
+            renderDrawTools();
         });
         sizes.appendChild(button);
     }
-    renderSketchTools();
+    renderDrawTools();
 
-    const canvas = sketch.canvas;
-    const point = event => {
-        const rect = canvas.getBoundingClientRect();
-        return [
-            ((event.clientX - rect.left) / rect.width) * canvas.width,
-            ((event.clientY - rect.top) / rect.height) * canvas.height
-        ];
-    };
-    canvas.addEventListener('pointerdown', event => {
-        canvas.setPointerCapture(event.pointerId);
-        sketch.current = {
-            color: sketch.eraser ? '#ffffff' : sketch.color,
-            size: sketch.eraser ? sketch.size * 3 : sketch.size,
-            points: [point(event)]
+    drawLayer.addEventListener('pointerdown', event => {
+        // Middle-button drags fall through to the board so you can still pan
+        if (event.button !== 0 || drawing.saving) return;
+        event.preventDefault();
+        event.stopPropagation();
+        drawLayer.setPointerCapture(event.pointerId);
+        const point = screenToWorld(event.clientX, event.clientY);
+        drawing.current = {
+            color: drawing.color,
+            size: (drawing.eraser ? drawing.size * 3 : drawing.size) / view.scale,
+            erase: drawing.eraser,
+            points: [[point.x, point.y]]
         };
-        sketch.strokes.push(sketch.current);
-        drawSketch();
+        drawing.strokes.push(drawing.current);
+        renderDrawing();
     });
-    canvas.addEventListener('pointermove', event => {
-        if (!sketch.current) return;
-        sketch.current.points.push(point(event));
-        drawSketch();
+    drawLayer.addEventListener('pointermove', event => {
+        if (!drawing.current) return;
+        const point = screenToWorld(event.clientX, event.clientY);
+        drawing.current.points.push([point.x, point.y]);
+        renderDrawing();
     });
-    const finish = () => { sketch.current = null; };
-    canvas.addEventListener('pointerup', finish);
-    canvas.addEventListener('pointercancel', finish);
+    const finish = () => { drawing.current = null; };
+    drawLayer.addEventListener('pointerup', finish);
+    drawLayer.addEventListener('pointercancel', finish);
+
+    window.addEventListener('resize', () => {
+        sizeDrawLayer();
+        renderDrawing();
+    });
+    document.addEventListener('keydown', event => {
+        if (!drawing.active) return;
+        if (event.key === 'Escape') cancelDrawing();
+        if (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            undoStroke();
+        }
+    });
 }
 
-function renderSketchTools() {
-    document.querySelectorAll('#sketch-colors .swatch').forEach(swatch => {
-        swatch.classList.toggle('selected', !sketch.eraser && swatch.dataset.color === sketch.color);
+function renderDrawTools() {
+    document.querySelectorAll('#draw-colors .swatch').forEach(swatch => {
+        swatch.classList.toggle('selected', !drawing.eraser && swatch.dataset.color === drawing.color);
     });
-    document.querySelectorAll('#sketch-sizes .size-btn').forEach(button => {
-        button.classList.toggle('selected', Number(button.dataset.size) === sketch.size);
+    document.querySelectorAll('#draw-sizes .size-btn').forEach(button => {
+        button.classList.toggle('selected', Number(button.dataset.size) === drawing.size);
     });
-    document.getElementById('sketch-eraser').classList.toggle('active', sketch.eraser);
+    document.getElementById('draw-eraser').classList.toggle('active', drawing.eraser);
 }
 
-function drawSketch() {
-    const ctx = sketch.canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, sketch.canvas.width, sketch.canvas.height);
+function sizeDrawLayer() {
+    const ratio = window.devicePixelRatio || 1;
+    drawLayer.width = Math.round(viewport.clientWidth * ratio);
+    drawLayer.height = Math.round(viewport.clientHeight * ratio);
+}
+
+// Eraser strokes cut through ink, so the saved doodle stays transparent
+function paintStrokes(ctx, strokes) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    for (const stroke of sketch.strokes) {
+    for (const stroke of strokes) {
+        ctx.globalCompositeOperation = stroke.erase ? 'destination-out' : 'source-over';
         ctx.strokeStyle = stroke.color;
         ctx.fillStyle = stroke.color;
         ctx.lineWidth = stroke.size;
         const [first, ...rest] = stroke.points;
+        ctx.beginPath();
         if (rest.length === 0) {
-            ctx.beginPath();
             ctx.arc(first[0], first[1], stroke.size / 2, 0, Math.PI * 2);
             ctx.fill();
             continue;
         }
-        ctx.beginPath();
         ctx.moveTo(...first);
         rest.forEach(p => ctx.lineTo(...p));
         ctx.stroke();
     }
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+// Draw the in-progress doodle over the board, following zoom and pan
+function renderDrawing() {
+    if (!drawing.active) return;
+    const ratio = window.devicePixelRatio || 1;
+    const ctx = drawLayer.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+    ctx.setTransform(ratio * view.scale, 0, 0, ratio * view.scale, ratio * view.x, ratio * view.y);
+    paintStrokes(ctx, drawing.strokes);
+}
+
+function startDrawing() {
+    if (drawing.active) return;
+    drawing.active = true;
+    drawing.strokes = [];
+    drawLayer.classList.remove('hidden');
+    document.getElementById('draw-toolbar').classList.remove('hidden');
+    document.getElementById('draw-btn').classList.add('active');
+    viewport.classList.add('drawing');
+    sizeDrawLayer();
+    renderDrawing();
+    toast('✏️ Draw anywhere on the board, then hit "Done drawing"');
+}
+
+function stopDrawing() {
+    drawing.active = false;
+    drawing.saving = false;
+    drawing.current = null;
+    drawing.strokes = [];
+    drawLayer.classList.add('hidden');
+    document.getElementById('draw-toolbar').classList.add('hidden');
+    document.getElementById('draw-btn').classList.remove('active');
+    viewport.classList.remove('drawing');
+    const done = document.getElementById('draw-done');
+    done.disabled = false;
+    done.innerHTML = '<span class="material-icons">check</span>Done drawing';
+}
+
+function cancelDrawing() {
+    if (drawing.saving) return;
+    const hasInk = drawing.strokes.some(stroke => !stroke.erase);
+    if (hasInk && !confirm('Throw away this drawing?')) return;
+    stopDrawing();
 }
 
 function toggleEraser() {
-    sketch.eraser = !sketch.eraser;
-    renderSketchTools();
+    drawing.eraser = !drawing.eraser;
+    renderDrawTools();
 }
 
 function undoStroke() {
-    sketch.strokes.pop();
-    drawSketch();
+    drawing.strokes.pop();
+    renderDrawing();
 }
 
-function clearSketch() {
-    sketch.strokes = [];
-    drawSketch();
+function clearDrawing() {
+    drawing.strokes = [];
+    renderDrawing();
 }
 
-function openSketch(column) {
-    document.getElementById('sketch-column').value = column;
-    sketch.strokes = [];
-    drawSketch();
-    document.getElementById('sketch-modal').classList.remove('hidden');
+function columnAtWorld(point) {
+    const column = [...document.querySelectorAll('.board-column')].find(el => {
+        const offset = worldOffset(el);
+        return point.x >= offset.x && point.x <= offset.x + el.offsetWidth &&
+            point.y >= offset.y && point.y <= offset.y + el.offsetHeight;
+    });
+    return column?.dataset.column ?? null;
 }
 
-function closeSketch() {
-    document.getElementById('sketch-modal').classList.add('hidden');
-}
-
-document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeSketch();
-});
-
-async function saveSketch() {
-    if (sketch.strokes.length === 0) {
-        toast('Draw something first ✏️');
+// Save the doodle as a transparent image trimmed to the ink, placed exactly
+// where it was drawn, then it's a normal movable/resizable item
+async function finishDrawing() {
+    if (drawing.saving) return;
+    const ink = drawing.strokes.filter(stroke => !stroke.erase);
+    if (ink.length === 0) {
+        stopDrawing();
         return;
     }
-    const button = document.getElementById('sketch-save');
-    button.disabled = true;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const stroke of ink) {
+        for (const [x, y] of stroke.points) {
+            minX = Math.min(minX, x - stroke.size / 2);
+            minY = Math.min(minY, y - stroke.size / 2);
+            maxX = Math.max(maxX, x + stroke.size / 2);
+            maxY = Math.max(maxY, y + stroke.size / 2);
+        }
+    }
+    const pad = 4;
+    minX -= pad;
+    minY -= pad;
+    maxX += pad;
+    maxY += pad;
+    // Very small doodles get transparent room so they aren't scaled up
+    if (maxX - minX < MIN_ITEM_WIDTH) {
+        const extra = (MIN_ITEM_WIDTH - (maxX - minX)) / 2;
+        minX -= extra;
+        maxX += extra;
+    }
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    drawing.saving = true;
+    const done = document.getElementById('draw-done');
+    done.disabled = true;
+    done.innerHTML = '<span class="material-icons">hourglass_top</span>Saving…';
+
     try {
-        let blob = await canvasToBlob(sketch.canvas, 'image/webp', 0.9);
-        if (!blob || blob.type !== 'image/webp') blob = await canvasToBlob(sketch.canvas, 'image/png');
+        let blob = null;
+        // Sharp on zoomed-in screens, but never more than 4000px on a side
+        let resolution = Math.min(2, 4000 / Math.max(width, height));
+        for (let attempt = 0; attempt < 4; attempt++, resolution /= 2) {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.ceil(width * resolution));
+            canvas.height = Math.max(1, Math.ceil(height * resolution));
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(resolution, 0, 0, resolution, -minX * resolution, -minY * resolution);
+            paintStrokes(ctx, drawing.strokes);
+            blob = await canvasToBlob(canvas, 'image/png');
+            if (blob && blob.size <= MAX_IMAGE_BYTES) break;
+        }
+        if (!blob || blob.size > MAX_IMAGE_BYTES) throw new Error('Drawing is too large');
+
         const imageId = await uploadImage(blob);
-        const column = document.getElementById('sketch-column').value || null;
-        socket.emit('addImage', { imageId, type: 'sketch', ...freeSpot(column) });
-        closeSketch();
+        const placement = {
+            column: columnAtWorld({ x: minX + width / 2, y: minY + height / 2 }),
+            x: Math.max(0, Math.round(minX)),
+            y: Math.max(0, Math.round(minY)),
+            w: Math.round(width)
+        };
+        // Keep the ink on screen until the saved doodle replaces it
+        const fallback = setTimeout(() => {
+            stopDrawing();
+            toast("Couldn't save the drawing - please try again");
+        }, 8000);
+        socket.emit('addImage', { imageId, type: 'sketch', ...placement }, () => {
+            clearTimeout(fallback);
+            stopDrawing();
+        });
     } catch (error) {
-        console.error('Sketch upload failed:', error);
-        toast(`Couldn't pin the sketch: ${error.message}`);
-    } finally {
-        button.disabled = false;
+        console.error('Drawing upload failed:', error);
+        toast(`Couldn't save the drawing: ${error.message}`);
+        drawing.saving = false;
+        done.disabled = false;
+        done.innerHTML = '<span class="material-icons">check</span>Done drawing';
     }
 }
 
@@ -1276,6 +1393,6 @@ socket.on('updateParticipants', ({ participants: participantsList }) => {
 });
 
 buildBoard();
-buildSketchTools();
+buildDrawTools();
 updateSurfaceHeights();
 initViewport();
