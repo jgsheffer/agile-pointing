@@ -28,7 +28,11 @@ const MAX_STORY_LENGTH = 140;
 const MAX_HISTORY = 50;
 const MAX_CARD_LENGTH = 2000;
 const MAX_CARDS_PER_ROOM = 500;
-const MAX_BOARD_HEIGHT = 20000;
+// Retro items live anywhere on a large canvas, in canvas pixels
+const MAX_BOARD_SIZE = 20000;
+const MIN_ITEM_WIDTH = 120;
+const MIN_ITEM_HEIGHT = 80;
+const MAX_ITEM_SIZE = 1600;
 const MAX_AVATAR_LENGTH = 360 * 1024; // ~256KB image once base64 encoded
 const MAX_SOCKET_MESSAGE = 512 * 1024;
 
@@ -238,7 +242,8 @@ function isSimilar(a, b) {
 
 function groupSimilarCards(cards) {
   const result = [];
-  for (const column of RETRO_COLUMNS) {
+  // null is the open board outside the columns
+  for (const column of [...RETRO_COLUMNS, null]) {
     const submitted = cards
       .filter((c) => c.column === column && c.isSubmitted && c.type === 'note')
       .sort((a, b) => b.votes - a.votes);
@@ -469,6 +474,8 @@ function createServer({
     return { count, bytes };
   }
 
+  const isHeaderImage = (image) => image.cardId?.startsWith('header:') ?? false;
+
   function deleteImages(predicate) {
     for (const [id, image] of retroImages) {
       if (predicate(image)) retroImages.delete(id);
@@ -642,11 +649,15 @@ function createServer({
     });
   }
 
-  function placement(roomData, { column, x, y }) {
+  // Items can sit in a column or anywhere else on the board (column null)
+  const isPlacementColumn = (column) =>
+    column === null || RETRO_COLUMNS.includes(column);
+
+  function placement(roomData, { column = null, x, y }) {
     return {
       column,
-      x: clamp(x, 0, 1, 0),
-      y: clamp(y, 0, MAX_BOARD_HEIGHT, 0),
+      x: clamp(x, 0, MAX_BOARD_SIZE, 0),
+      y: clamp(y, 0, MAX_BOARD_SIZE, 0),
       z: ++roomData.zCounter,
     };
   }
@@ -905,6 +916,7 @@ function createServer({
           participants: new Map(),
           lastActivity: Date.now(),
           zCounter: 0,
+          headers: {}, // column -> imageId shown above the column
         });
         console.log(`Created new retro room: ${room}`);
       }
@@ -914,6 +926,7 @@ function createServer({
 
       // Send existing cards to the new participant
       socket.emit('loadCards', { cards: roomData.cards });
+      socket.emit('columnHeaders', { headers: roomData.headers });
 
       io.to(room).emit('participantJoined', { name });
       io.to(room).emit('updateParticipants', {
@@ -932,13 +945,15 @@ function createServer({
       author: membership.name,
       isSubmitted: false,
       groupedCards: [],
+      w: null, // null = default size
+      h: null, // notes only; images keep their aspect ratio
       ...fields,
     });
 
     on(
       'addCard',
       withRetroRoom((roomData, payload, membership, ack) => {
-        if (!RETRO_COLUMNS.includes(payload.column)) return;
+        if (!isPlacementColumn(payload.column ?? null)) return;
         if (roomData.cards.length >= MAX_CARDS_PER_ROOM) return;
 
         const card = newCard(roomData, membership, {
@@ -956,7 +971,7 @@ function createServer({
       'addImage',
       withRetroRoom((roomData, payload, membership, ack) => {
         const image = retroImages.get(payload.imageId);
-        if (!RETRO_COLUMNS.includes(payload.column)) return;
+        if (!isPlacementColumn(payload.column ?? null)) return;
         if (!['image', 'sketch'].includes(payload.type)) return;
         if (!image || image.room !== membership.room || image.cardId) return;
         if (roomData.cards.length >= MAX_CARDS_PER_ROOM) return;
@@ -1020,10 +1035,25 @@ function createServer({
       'moveCard',
       withRetroRoom((roomData, payload) => {
         const card = findCard(roomData, payload.cardId);
-        const column = payload.column ?? payload.newColumn;
-        if (!card || !RETRO_COLUMNS.includes(column)) return;
+        const column = payload.column ?? null;
+        if (!card || !isPlacementColumn(column)) return;
 
         Object.assign(card, placement(roomData, { ...card, ...payload, column }));
+        return { upsert: card };
+      })
+    );
+
+    on(
+      'resizeCard',
+      withRetroRoom((roomData, payload) => {
+        const card = findCard(roomData, payload.cardId);
+        if (!card) return;
+
+        card.w = clamp(payload.w, MIN_ITEM_WIDTH, MAX_ITEM_SIZE, card.w);
+        card.h =
+          card.type === 'note'
+            ? clamp(payload.h, MIN_ITEM_HEIGHT, MAX_ITEM_SIZE, card.h)
+            : null;
         return { upsert: card };
       })
     );
@@ -1032,10 +1062,32 @@ function createServer({
       'resetRetro',
       withRetroRoom((roomData, payload, membership) => {
         roomData.cards = [];
-        deleteImages((image) => image.room === membership.room);
+        // Column header images are part of the board's look, so they stay
+        deleteImages(
+          (image) => image.room === membership.room && !isHeaderImage(image)
+        );
         return { reload: true };
       })
     );
+
+    on('setColumnImage', (payload) => {
+      const membership = socket.data.retro;
+      const roomData = membership && retroRooms.get(membership.room);
+      if (!roomData || !RETRO_COLUMNS.includes(payload.column)) return;
+
+      const { column, imageId } = payload;
+      if (imageId !== null) {
+        const image = retroImages.get(imageId);
+        if (!image || image.room !== membership.room || image.cardId) return;
+        image.cardId = `header:${column}`;
+      }
+
+      const previous = roomData.headers[column];
+      if (previous && previous !== imageId) retroImages.delete(previous);
+      roomData.headers[column] = imageId;
+      roomData.lastActivity = Date.now();
+      io.to(membership.room).emit('columnHeaders', { headers: roomData.headers });
+    });
 
     on(
       'groupSimilarCards',

@@ -22,9 +22,11 @@ A real-time collaborative application for agile teams, featuring Agile Pointing 
 - Away indicator for disconnected participants
 
 ### Sprint Retrospective
-- Four free-form columns: What Went Well, What Could Be Improved, Action Items and Kudos
-- Drag colored sticky notes from the pad onto any spot on the board, and move them between columns
-- Drop, paste or upload images onto a column
+- A large zoomable canvas: scroll wheel (or pinch) zooms around the cursor, dragging empty space pans, with zoom controls and Fit; each person's view is remembered per room
+- Four columns: What Went Well, What Could Be Improved, Action Items and Kudos, each with an optional header image
+- Sticky notes, images and sketches go anywhere on the canvas, inside a column or not, and stay exactly where they're dropped
+- Every item can be resized from its corner handle (images and sketches keep their proportions)
+- Drag colored stickies from the pad, drop image files straight from your file explorer, or paste images
 - Sketch pad (pen colors, sizes, eraser, undo) that pins drawings to the board
 - Voting, similar-note grouping and a 5-minute timer
 
@@ -114,7 +116,8 @@ All of these except the access endpoints require the access cookie.
 const pointingRooms = new Map();
 
 // Retro Rooms
-// roomId -> { cards: Card[], participants: Map<socketId, name>, lastActivity, zCounter }
+// roomId -> { cards: Card[], participants: Map<socketId, name>, lastActivity,
+//             zCounter, headers: { [column]: imageId } }
 const retroRooms = new Map();
 
 // Sessions (pointing reconnects)
@@ -134,10 +137,12 @@ const retroImages = new Map();
     content: string,         // notes only, up to 2000 characters
     color: 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange',
     imageId?: string,        // images and sketches
-    column: 'went-well' | 'improve' | 'action-items' | 'kudos',
-    x: number,               // 0-1 across the column, so layouts survive resizing
-    y: number,               // pixels from the top of the column
+    column: 'went-well' | 'improve' | 'action-items' | 'kudos' | null, // null = open board
+    x: number,               // canvas pixels from the left (0-20000)
+    y: number,               // canvas pixels from the top (0-20000)
     z: number,               // stacking order, raised on every move
+    w: number | null,        // width (120-1600), null for the default
+    h: number | null,        // notes only; images keep their aspect ratio
     votes: number,
     author: string,
     voters: string[],
@@ -165,13 +170,15 @@ State arrives as `roomState`, `votesRevealed` and `votesReset`, each with `{ roo
 
 ### Retrospective
 - `joinRetro` `{ room, name }`
-- `addCard` `{ column, color, x, y }` (acknowledged with the new card id)
+- `addCard` `{ column, color, x, y }` (acknowledged with the new card id; `column` may be `null`)
 - `addImage` `{ imageId, type: 'image' | 'sketch', column, x, y }` after uploading
 - `submitCard` `{ cardId, content }`
 - `voteCard` `{ cardId }`
 - `deleteCard` `{ cardId }` (also deletes the image)
 - `moveCard` `{ cardId, column, x, y }`
-- `resetRetro`
+- `resizeCard` `{ cardId, w, h }`
+- `setColumnImage` `{ column, imageId | null }` → `columnHeaders` `{ headers }` (also sent on join)
+- `resetRetro` (clears the board; header images stay)
 - `groupSimilarCards`
 
 Changes arrive as `cardUpserted` / `cardRemoved`, and the full board as `loadCards` on join, reset and grouping.
@@ -228,12 +235,13 @@ Room IDs can use letters, numbers, spaces, `-` and `_` (up to 64 characters).
 Custom avatars are cropped and resized to 128×128 in the browser. Animated GIFs are kept as-is and must be under 256 KB.
 
 ### Retrospective
-1. Drag a sticky from the pad onto a column (or use ➕ on a column), type, then Submit (Ctrl+Enter)
-2. Drop, paste or upload images, or ✏️ sketch something and pin it
-3. Drag anything around the board, including into another column
-4. Vote on items for prioritization
-5. Use timer for timeboxed discussions
-6. Group similar notes to merge duplicates (and their votes)
+1. Drag a sticky from the pad anywhere on the board (or use ➕ on a column), type, then Submit (Ctrl+Enter)
+2. Drop image files from your file explorer, paste or upload images, or ✏️ sketch something and pin it
+3. Drag anything around the board and resize it from its corner; scroll to zoom, drag empty space to pan (`+` / `-` / `0` to fit / `1` for 100%)
+4. Optionally give a column a header image (🖼 button, or drop an image on the header)
+5. Vote on items for prioritization
+6. Use timer for timeboxed discussions
+7. Group similar notes to merge duplicates (and their votes)
 
 ## Development Notes
 

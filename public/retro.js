@@ -36,6 +36,11 @@ const NOTE_COLORS = {
 const MAX_IMAGE_BYTES = 1024 * 1024;
 const MAX_IMAGE_SIDE = 1200;
 const DRAG_THRESHOLD = 4;
+const DEFAULT_ITEM_WIDTH = 220;
+const MIN_ITEM_WIDTH = 120;
+const MIN_ITEM_HEIGHT = 80;
+const MAX_ITEM_SIZE = 1600;
+const BOARD_MARGIN = 800; // empty canvas kept beyond the furthest item
 
 // Core variables
 let userName = '';
@@ -119,23 +124,48 @@ function iconButton(icon, label, onClick) {
 
 function buildBoard() {
     const board = document.getElementById('board');
+    const anywhere = document.createElement('option');
+    anywhere.value = '';
+    anywhere.textContent = "Where I'm looking";
+    document.getElementById('sketch-column').appendChild(anywhere);
     for (const column of COLUMNS) {
         const section = document.createElement('section');
-        section.className = 'board-column glass p-4';
+        section.className = 'board-column';
+        section.dataset.column = column.id;
 
         const header = document.createElement('div');
-        header.className = 'flex items-center justify-between gap-2 mb-3';
+        header.className = 'column-header';
+        header.dataset.column = column.id;
+
+        // Optional banner image set by anyone in the room
+        const banner = document.createElement('div');
+        banner.className = 'column-banner hidden';
+        const bannerImg = document.createElement('img');
+        bannerImg.alt = `${column.title} header image`;
+        bannerImg.draggable = false;
+        const bannerActions = document.createElement('div');
+        bannerActions.className = 'banner-actions';
+        bannerActions.append(
+            iconButton('wallpaper', 'Change header image', () => pickHeaderImage(column.id)),
+            iconButton('hide_image', 'Remove header image', () => removeHeaderImage(column.id))
+        );
+        banner.append(bannerImg, bannerActions);
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'flex items-center justify-between gap-2';
         const title = document.createElement('h2');
-        title.className = `text-lg font-bold ${column.color}`;
+        title.className = `font-bold ${column.color}`;
         title.textContent = `${column.title} ${column.emoji}`;
         const actions = document.createElement('div');
         actions.className = 'flex';
         actions.append(
             iconButton('note_add', `Add a note to ${column.title}`, () => addCard(column.id)),
             iconButton('image', `Add an image to ${column.title}`, () => pickImages(column.id)),
-            iconButton('brush', `Sketch for ${column.title}`, () => openSketch(column.id))
+            iconButton('brush', `Sketch for ${column.title}`, () => openSketch(column.id)),
+            iconButton('wallpaper', `Set a header image for ${column.title}`, () => pickHeaderImage(column.id))
         );
-        header.append(title, actions);
+        titleRow.append(title, actions);
+        header.append(banner, titleRow);
 
         const surface = document.createElement('div');
         surface.className = 'column-surface';
@@ -176,10 +206,6 @@ function buildBoard() {
         pad.appendChild(note);
     }
     selectColor(selectedColor);
-
-    // Positions are stored relative to the column width, so re-layout on resize
-    const observer = new ResizeObserver(() => layoutAll());
-    document.querySelectorAll('.column-surface').forEach(surface => observer.observe(surface));
 }
 
 function selectColor(color) {
@@ -189,59 +215,127 @@ function selectColor(color) {
     });
 }
 
+const viewport = document.getElementById('board-viewport');
+const world = document.getElementById('board-world');
+const itemsLayer = document.getElementById('items-layer');
 const surfaces = () => [...document.querySelectorAll('.column-surface')];
 const surfaceFor = column => document.getElementById(column);
 
-function surfaceAt(clientX, clientY) {
-    return surfaces().find(surface => {
-        const rect = surface.getBoundingClientRect();
-        return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
-    }) ?? null;
+// The board is drawn in "world" pixels and scaled/panned with a CSS
+// transform. Items are positioned in world pixels anywhere on the board;
+// their column is whichever column they were dropped on (or none).
+function worldOffset(el) {
+    let x = 0;
+    let y = 0;
+    for (let node = el; node && node !== world; node = node.offsetParent) {
+        x += node.offsetLeft;
+        y += node.offsetTop;
+    }
+    return { x, y };
 }
 
-// Board coordinates for an item whose top-left corner is at (left, top) on screen
-function boardPosition(surface, left, top, width) {
-    const rect = surface.getBoundingClientRect();
-    const travel = Math.max(1, rect.width - width);
+function screenToWorld(clientX, clientY) {
+    const rect = viewport.getBoundingClientRect();
     return {
-        column: surface.dataset.column,
-        x: Math.min(1, Math.max(0, (left - rect.left) / travel)),
-        y: Math.max(0, Math.round(top - rect.top))
+        x: (clientX - rect.left - view.x) / view.scale,
+        y: (clientY - rect.top - view.y) / view.scale
     };
 }
 
-// Somewhere below everything already in the column
+function insideViewport(clientX, clientY) {
+    const rect = viewport.getBoundingClientRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function elementAt(elements, clientX, clientY) {
+    if (!insideViewport(clientX, clientY)) return null;
+    const point = screenToWorld(clientX, clientY);
+    return elements.find(el => {
+        const offset = worldOffset(el);
+        return point.x >= offset.x && point.x <= offset.x + el.offsetWidth &&
+            point.y >= offset.y && point.y <= offset.y + el.offsetHeight;
+    }) ?? null;
+}
+
+// The whole column (header included) counts when dropping things on it
+const columnAt = (clientX, clientY) =>
+    elementAt([...document.querySelectorAll('.board-column')], clientX, clientY)?.dataset.column ?? null;
+const headerAt = (clientX, clientY) =>
+    elementAt([...document.querySelectorAll('.column-header')], clientX, clientY);
+
+// Where an item lands when its top-left corner is at a world point
+function spotAt(clientX, clientY, left, top) {
+    return {
+        column: columnAt(clientX, clientY),
+        x: Math.max(0, Math.round(left)),
+        y: Math.max(0, Math.round(top))
+    };
+}
+
+// Last place the pointer was over the board, for pasted images
+let lastPointer = null;
+viewport.addEventListener('pointermove', event => {
+    lastPointer = { x: event.clientX, y: event.clientY };
+});
+
+// Middle of what you're looking at (or the last pointer spot on the board)
+function spotInView() {
+    const rect = viewport.getBoundingClientRect();
+    const target = lastPointer && insideViewport(lastPointer.x, lastPointer.y)
+        ? lastPointer
+        : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const point = screenToWorld(target.x, target.y);
+    return spotAt(target.x, target.y, point.x - DEFAULT_ITEM_WIDTH / 2, point.y - 40);
+}
+
+// Below everything already in a column, or in view for the open board
 function freeSpot(column) {
-    let bottom = 12;
+    const surface = column && surfaceFor(column);
+    if (!surface) return spotInView();
+    const offset = worldOffset(surface);
+    let bottom = offset.y + 16;
     for (const card of cards.values()) {
         if (card.column !== column) continue;
         const el = cardElements.get(card.id);
-        bottom = Math.max(bottom, card.y + (el?.offsetHeight ?? 120) + 14);
+        bottom = Math.max(bottom, card.y + (el?.offsetHeight ?? 120) + 16);
     }
-    return { column, x: Math.random() * 0.2, y: bottom };
+    return { column, x: Math.round(offset.x + 16 + Math.random() * 120), y: Math.round(bottom) };
 }
 
 // ---------- Layout ----------
 
 function layoutCard(el, card) {
-    const surface = surfaceFor(card.column);
-    if (!surface) return;
-    if (el.parentElement !== surface) surface.appendChild(el);
-    const travel = Math.max(0, surface.clientWidth - el.offsetWidth);
-    el.style.left = `${Math.round(card.x * travel)}px`;
+    if (el.parentElement !== itemsLayer) itemsLayer.appendChild(el);
+    el.style.left = `${card.x}px`;
     el.style.top = `${card.y}px`;
     el.style.zIndex = card.z;
+    if (!el.classList.contains('resizing')) {
+        el.style.width = card.w ? `${card.w}px` : '';
+        el.style.height = card.type === 'note' && card.h ? `${card.h}px` : '';
+    }
 }
 
+// Columns grow to hold their items, and the board grows past the furthest one
 function updateSurfaceHeights() {
-    for (const surface of surfaces()) {
-        let bottom = 0;
-        surface.querySelectorAll('.board-item').forEach(el => {
-            bottom = Math.max(bottom, el.offsetTop + el.offsetHeight);
-        });
-        surface.style.height = `${Math.max(420, bottom + 40)}px`;
-        surface.querySelector('.column-empty').classList.toggle('hidden', bottom > 0);
+    const bottoms = new Map();
+    let right = 0;
+    let bottom = 0;
+    for (const [id, el] of cardElements) {
+        const card = cards.get(id);
+        const itemBottom = el.offsetTop + el.offsetHeight;
+        right = Math.max(right, el.offsetLeft + el.offsetWidth);
+        bottom = Math.max(bottom, itemBottom);
+        if (card?.column) bottoms.set(card.column, Math.max(bottoms.get(card.column) ?? 0, itemBottom));
     }
+    for (const surface of surfaces()) {
+        const columnBottom = bottoms.get(surface.dataset.column);
+        const top = worldOffset(surface).y;
+        const needed = columnBottom ? columnBottom - top + 400 : 0;
+        surface.style.height = `${Math.max(1200, needed)}px`;
+        surface.querySelector('.column-empty').classList.toggle('hidden', Boolean(columnBottom));
+    }
+    world.style.width = `${Math.max(document.getElementById('board').offsetWidth + 96 + BOARD_MARGIN, right + BOARD_MARGIN)}px`;
+    world.style.height = `${Math.max(2400, bottom + BOARD_MARGIN)}px`;
 }
 
 function layoutAll() {
@@ -260,6 +354,50 @@ function createCardElement(card) {
     el.addEventListener('pointerdown', event => startItemDrag(event, el));
     el.addEventListener('animationend', () => el.classList.remove('landed'));
     return el;
+}
+
+// Bottom-right handle; notes resize freely, images keep their aspect ratio
+function ensureResizeHandle(el) {
+    if (el.querySelector(':scope > .resize-handle')) return;
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    handle.title = 'Drag to resize';
+    handle.addEventListener('pointerdown', event => startResize(event, el));
+    el.appendChild(handle);
+}
+
+function startResize(event, el) {
+    if (event.button !== 0) return;
+    const card = cards.get(el.dataset.id);
+    if (!card) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const isNote = card.type === 'note';
+    const start = { x: event.clientX, y: event.clientY, w: el.offsetWidth, h: el.offsetHeight };
+    const clampSize = (value, min) => Math.round(Math.min(MAX_ITEM_SIZE, Math.max(min, value)));
+    el.classList.add('resizing');
+
+    const move = moveEvent => {
+        const w = clampSize(start.w + (moveEvent.clientX - start.x) / view.scale, MIN_ITEM_WIDTH);
+        el.style.width = `${w}px`;
+        if (isNote) {
+            el.style.height = `${clampSize(start.h + (moveEvent.clientY - start.y) / view.scale, MIN_ITEM_HEIGHT)}px`;
+        }
+    };
+    const end = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+        el.classList.remove('resizing');
+        card.w = el.offsetWidth;
+        card.h = isNote ? el.offsetHeight : null;
+        updateSurfaceHeights();
+        socket.emit('resizeCard', { cardId: card.id, w: card.w, h: card.h });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
 }
 
 function createFooter(card) {
@@ -380,6 +518,7 @@ function upsertCard(card, { landed = false } = {}) {
     }
     el.classList.add(...keepClasses);
     if (landed) el.classList.add('landed');
+    ensureResizeHandle(el);
 
     if (!el.classList.contains('dragging')) layoutCard(el, card);
     updateSurfaceHeights();
@@ -401,9 +540,11 @@ function loadAllCards(allCards) {
 }
 
 function addCard(column, position = freeSpot(column)) {
-    socket.emit('addCard', { ...position, column, color: selectedColor }, cardId => {
-        const textarea = cardElements.get(cardId)?.querySelector('textarea');
-        if (textarea) textarea.focus();
+    socket.emit('addCard', { ...position, color: selectedColor }, cardId => {
+        const el = cardElements.get(cardId);
+        if (!el) return;
+        bringIntoView(el);
+        el.querySelector('textarea')?.focus({ preventScroll: true });
     });
 }
 
@@ -437,14 +578,11 @@ function groupSimilarCards() {
 
 // ---------- Dragging ----------
 
-// Shared pointer-drag: the element follows the pointer, then onDrop gets the
-// surface under the pointer (or null) and the element's final screen rect.
-function followPointer(event, el, { onStart, onDrop }) {
+// Moves an element around the board under the pointer, then calls onDrop
+// with the element's world spot (null if it was dropped off the board).
+function dragInWorld(event, el, { grab, onStart, onDrop }) {
     const startX = event.clientX;
     const startY = event.clientY;
-    const rect = el.getBoundingClientRect();
-    const offsetX = startX - rect.left;
-    const offsetY = startY - rect.top;
     let dragging = false;
     let hovered = null;
 
@@ -453,15 +591,15 @@ function followPointer(event, el, { onStart, onDrop }) {
             if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < DRAG_THRESHOLD) return;
             dragging = true;
             onStart?.();
-            el.style.width = `${rect.width}px`;
-            el.style.position = 'fixed';
             el.classList.add('dragging');
-            document.body.appendChild(el);
+            if (el.parentElement !== itemsLayer) itemsLayer.appendChild(el);
         }
-        el.style.left = `${moveEvent.clientX - offsetX}px`;
-        el.style.top = `${moveEvent.clientY - offsetY}px`;
+        const point = screenToWorld(moveEvent.clientX, moveEvent.clientY);
+        el.style.left = `${point.x - grab.x}px`;
+        el.style.top = `${point.y - grab.y}px`;
 
-        const surface = surfaceAt(moveEvent.clientX, moveEvent.clientY);
+        const column = columnAt(moveEvent.clientX, moveEvent.clientY);
+        const surface = column && surfaceFor(column);
         if (surface !== hovered) {
             hovered?.classList.remove('drop-target');
             surface?.classList.add('drop-target');
@@ -475,14 +613,15 @@ function followPointer(event, el, { onStart, onDrop }) {
         window.removeEventListener('pointercancel', end);
         hovered?.classList.remove('drop-target');
         if (!dragging) {
-            onDrop(null, null, false);
+            onDrop(null, false);
             return;
         }
-        const finalRect = el.getBoundingClientRect();
         el.classList.remove('dragging');
-        el.style.position = '';
-        el.style.width = '';
-        onDrop(surfaceAt(endEvent.clientX, endEvent.clientY), finalRect, true);
+        const onBoard = insideViewport(endEvent.clientX, endEvent.clientY);
+        const spot = onBoard
+            ? spotAt(endEvent.clientX, endEvent.clientY, parseFloat(el.style.left), parseFloat(el.style.top))
+            : null;
+        onDrop(spot, true);
     };
 
     window.addEventListener('pointermove', move);
@@ -492,28 +631,28 @@ function followPointer(event, el, { onStart, onDrop }) {
 
 function startItemDrag(event, el) {
     if (event.button !== 0) return;
-    if (event.target.closest('textarea, button, input, a')) return;
+    if (event.target.closest('textarea, button, input, a, .resize-handle')) return;
     const card = cards.get(el.dataset.id);
     if (!card) return;
     event.preventDefault();
+    event.stopPropagation(); // don't pan the board as well
 
-    followPointer(event, el, {
-        onDrop: (surface, rect, moved) => {
+    const point = screenToWorld(event.clientX, event.clientY);
+    dragInWorld(event, el, {
+        grab: { x: point.x - card.x, y: point.y - card.y },
+        onDrop: (spot, moved) => {
             if (!moved) return;
-            if (!surface) {
-                // Dropped outside the board: put it back
+            if (!spot) {
+                // Dropped off the board (e.g. on the toolbar): put it back
                 layoutCard(el, card);
-                updateSurfaceHeights();
                 return;
             }
-            const position = boardPosition(surface, rect.left, rect.top, rect.width);
             // Show it where it landed right away; the server confirms the move
-            Object.assign(card, position, { z: card.z + 1000 });
-            surface.appendChild(el);
+            Object.assign(card, spot, { z: card.z + 1000 });
             layoutCard(el, card);
             el.classList.add('landed');
             updateSurfaceHeights();
-            socket.emit('moveCard', { cardId: card.id, ...position });
+            socket.emit('moveCard', { cardId: card.id, ...spot });
         }
     });
 }
@@ -521,29 +660,175 @@ function startItemDrag(event, el) {
 function startPadDrag(event, color) {
     if (event.button !== 0) return;
     event.preventDefault();
-    const source = event.currentTarget;
     const ghost = document.createElement('div');
     ghost.className = `board-item note color-${color}`;
     ghost.innerHTML = '<div class="note-writing">New note…</div>';
-    const rect = source.getBoundingClientRect();
-    ghost.style.left = `${rect.left}px`;
-    ghost.style.top = `${rect.top}px`;
-    ghost.style.position = 'fixed';
     ghost.style.visibility = 'hidden';
-    document.body.appendChild(ghost);
 
-    followPointer(event, ghost, {
+    dragInWorld(event, ghost, {
+        grab: { x: DEFAULT_ITEM_WIDTH / 2, y: 24 },
         onStart: () => { ghost.style.visibility = ''; },
-        onDrop: (surface, finalRect, moved) => {
+        onDrop: (spot, moved) => {
             ghost.remove();
             selectColor(color);
             if (!moved) {
-                toast('Drag the sticky onto a column - or use ➕ on a column');
+                toast('Drag the sticky anywhere on the board - or use ➕ on a column');
                 return;
             }
-            if (!surface) return;
-            addCard(surface.dataset.column, boardPosition(surface, finalRect.left, finalRect.top, finalRect.width));
+            if (spot) addCard(spot.column, spot);
         }
+    });
+}
+
+// ---------- Zoom & pan ----------
+
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 2.5;
+const VIEW_KEY = `retroView:${roomId}`;
+const view = { x: 0, y: 0, scale: 1 };
+const clampZoom = scale => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+
+function applyView() {
+    world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    document.getElementById('zoom-level').textContent = `${Math.round(view.scale * 100)}%`;
+    try {
+        localStorage.setItem(VIEW_KEY, JSON.stringify(view));
+    } catch {
+        // Not remembered, still works for this visit
+    }
+}
+
+// Zoom around a screen point so whatever is under it stays put
+function zoomAt(clientX, clientY, factor) {
+    const rect = viewport.getBoundingClientRect();
+    const cx = clientX - rect.left;
+    const cy = clientY - rect.top;
+    const next = clampZoom(view.scale * factor);
+    const ratio = next / view.scale;
+    view.x = cx - (cx - view.x) * ratio;
+    view.y = cy - (cy - view.y) * ratio;
+    view.scale = next;
+    applyView();
+}
+
+function viewportCenter() {
+    const rect = viewport.getBoundingClientRect();
+    return [rect.left + rect.width / 2, rect.top + rect.height / 2];
+}
+
+function zoomBy(factor) {
+    zoomAt(...viewportCenter(), factor);
+}
+
+function setZoom(scale) {
+    zoomAt(...viewportCenter(), scale / view.scale);
+}
+
+// Fit all columns across the screen, starting at the top of the board
+function fitBoard() {
+    const width = document.getElementById('board').offsetWidth + 96;
+    view.scale = clampZoom(Math.min(1, (viewport.clientWidth - 32) / width));
+    view.x = (viewport.clientWidth - width * view.scale) / 2;
+    view.y = 16;
+    applyView();
+}
+
+// Pan so an element is on screen (used for newly added notes)
+function bringIntoView(el) {
+    const offset = worldOffset(el);
+    const left = offset.x * view.scale + view.x;
+    const top = offset.y * view.scale + view.y;
+    const right = left + el.offsetWidth * view.scale;
+    const bottom = top + el.offsetHeight * view.scale;
+    if (left >= 0 && top >= 0 && right <= viewport.clientWidth && bottom <= viewport.clientHeight) return;
+    view.x = viewport.clientWidth / 2 - (offset.x + el.offsetWidth / 2) * view.scale;
+    view.y = viewport.clientHeight / 3 - offset.y * view.scale;
+    applyView();
+}
+
+function initViewport() {
+    let saved = null;
+    try {
+        saved = JSON.parse(localStorage.getItem(VIEW_KEY));
+    } catch {
+        saved = null;
+    }
+    if (saved && [saved.x, saved.y, saved.scale].every(Number.isFinite)) {
+        Object.assign(view, saved, { scale: clampZoom(saved.scale) });
+        applyView();
+    } else {
+        fitBoard();
+    }
+
+    // The scroll wheel zooms (trackpad pinches arrive as ctrl+wheel)
+    viewport.addEventListener('wheel', event => {
+        event.preventDefault();
+        const delta = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaY;
+        zoomAt(event.clientX, event.clientY, Math.exp(-delta * (event.ctrlKey ? 0.01 : 0.0015)));
+    }, { passive: false });
+
+    // Drag empty space (or use the middle button anywhere) to pan; pinch to zoom on touch
+    const pointers = new Map();
+    let pan = null;
+    let pinch = null;
+
+    viewport.addEventListener('pointerdown', event => {
+        const onControl = event.target.closest('.board-item, .resize-handle, button, textarea, input, select, a, .zoom-controls');
+        if (event.button === 2 || (event.button === 0 && onControl)) return;
+        event.preventDefault();
+        viewport.setPointerCapture(event.pointerId);
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (pointers.size === 2) {
+            const [a, b] = [...pointers.values()];
+            pinch = {
+                distance: Math.hypot(a.x - b.x, a.y - b.y),
+                mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+            };
+            pan = null;
+        } else {
+            pan = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
+            viewport.classList.add('panning');
+        }
+    });
+
+    viewport.addEventListener('pointermove', event => {
+        if (!pointers.has(event.pointerId)) return;
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (pinch && pointers.size === 2) {
+            const [a, b] = [...pointers.values()];
+            const distance = Math.hypot(a.x - b.x, a.y - b.y);
+            const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+            view.x += mid.x - pinch.mid.x;
+            view.y += mid.y - pinch.mid.y;
+            zoomAt(mid.x, mid.y, distance / pinch.distance);
+            pinch = { distance, mid };
+        } else if (pan) {
+            view.x = pan.viewX + event.clientX - pan.x;
+            view.y = pan.viewY + event.clientY - pan.y;
+            applyView();
+        }
+    });
+
+    const release = event => {
+        pointers.delete(event.pointerId);
+        if (pointers.size < 2) pinch = null;
+        if (pointers.size === 0) {
+            pan = null;
+            viewport.classList.remove('panning');
+        }
+    };
+    viewport.addEventListener('pointerup', release);
+    viewport.addEventListener('pointercancel', release);
+
+    document.addEventListener('keydown', event => {
+        if (event.target.closest('textarea, input, select') || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (!document.getElementById('sketch-modal').classList.contains('hidden')) return;
+        if (event.key === '+' || event.key === '=') zoomBy(1.25);
+        else if (event.key === '-' || event.key === '_') zoomBy(1 / 1.25);
+        else if (event.key === '0') fitBoard();
+        else if (event.key === '1') setZoom(1);
     });
 }
 
@@ -591,13 +876,12 @@ async function addImageFiles(files, position) {
         toast('Only images can be dropped on the board');
         return;
     }
-    let spot = position;
-    for (const file of images) {
+    for (const [index, file] of images.entries()) {
         try {
             const imageId = await uploadImage(await prepareImage(file));
-            const target = spot ?? freeSpot(position?.column ?? lastColumn);
-            socket.emit('addImage', { imageId, type: 'image', ...target });
-            spot = null; // later images stack below the first
+            // Several images fan out a little so they don't hide each other
+            const spot = { ...position, x: position.x + index * 40, y: position.y + index * 40 };
+            socket.emit('addImage', { imageId, type: 'image', ...spot });
         } catch (error) {
             console.error('Image upload failed:', error);
             toast(`Couldn't add ${file.name || 'that image'}: ${error.message}`);
@@ -620,33 +904,45 @@ document.getElementById('image-input').addEventListener('change', event => {
 const hasFiles = event => [...(event.dataTransfer?.types ?? [])].includes('Files');
 let dropHighlight = null;
 
+function highlightDrop(target) {
+    if (target === dropHighlight) return;
+    dropHighlight?.classList.remove('drop-target');
+    target?.classList.add('drop-target');
+    dropHighlight = target;
+}
+
 document.addEventListener('dragover', event => {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    const surface = surfaceAt(event.clientX, event.clientY);
-    if (surface !== dropHighlight) {
-        dropHighlight?.classList.remove('drop-target');
-        surface?.classList.add('drop-target');
-        dropHighlight = surface;
-    }
+    event.dataTransfer.dropEffect = 'copy';
+    const header = headerAt(event.clientX, event.clientY);
+    const column = columnAt(event.clientX, event.clientY);
+    highlightDrop(header ?? (column && surfaceFor(column)));
 });
 
 document.addEventListener('dragleave', event => {
-    if (event.relatedTarget === null) {
-        dropHighlight?.classList.remove('drop-target');
-        dropHighlight = null;
-    }
+    if (event.relatedTarget === null) highlightDrop(null);
 });
 
+// Files dragged in from the desktop/file explorer land where they're dropped
 document.addEventListener('drop', event => {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    dropHighlight?.classList.remove('drop-target');
-    dropHighlight = null;
-    const surface = surfaceAt(event.clientX, event.clientY);
-    const position = surface
-        ? boardPosition(surface, event.clientX - 100, event.clientY - 20, 200)
-        : freeSpot(lastColumn);
+    highlightDrop(null);
+
+    // Dropping on a column header sets its banner image
+    const header = headerAt(event.clientX, event.clientY);
+    if (header) {
+        const image = [...event.dataTransfer.files].find(file => file.type.startsWith('image/'));
+        if (image) setHeaderImage(header.dataset.column, image);
+        return;
+    }
+
+    let position = spotInView();
+    if (insideViewport(event.clientX, event.clientY)) {
+        const point = screenToWorld(event.clientX, event.clientY);
+        position = spotAt(event.clientX, event.clientY, point.x - DEFAULT_ITEM_WIDTH / 2, point.y - 30);
+    }
     addImageFiles(event.dataTransfer.files, position);
 });
 
@@ -655,9 +951,54 @@ document.addEventListener('paste', event => {
     const files = [...(event.clipboardData?.files ?? [])];
     if (files.length > 0) {
         event.preventDefault();
-        addImageFiles(files, freeSpot(lastColumn));
+        addImageFiles(files, spotInView());
     }
 });
+
+// ---------- Column header images ----------
+
+let headerTargetColumn = null;
+
+function pickHeaderImage(column) {
+    headerTargetColumn = column;
+    document.getElementById('header-image-input').click();
+}
+
+document.getElementById('header-image-input').addEventListener('change', event => {
+    const [file] = event.target.files;
+    if (file && headerTargetColumn) setHeaderImage(headerTargetColumn, file);
+    event.target.value = '';
+});
+
+async function setHeaderImage(column, file) {
+    try {
+        const imageId = await uploadImage(await prepareImage(file));
+        socket.emit('setColumnImage', { column, imageId });
+    } catch (error) {
+        console.error('Header image upload failed:', error);
+        toast(`Couldn't set the header image: ${error.message}`);
+    }
+}
+
+function removeHeaderImage(column) {
+    socket.emit('setColumnImage', { column, imageId: null });
+}
+
+function renderHeaders(headers) {
+    for (const column of COLUMNS) {
+        const banner = document.querySelector(`.column-header[data-column="${column.id}"] .column-banner`);
+        const img = banner.querySelector('img');
+        const imageId = headers[column.id];
+        if (imageId) {
+            const src = `/api/retro-images/${encodeURIComponent(imageId)}`;
+            if (img.getAttribute('src') !== src) img.src = src;
+            banner.classList.remove('hidden');
+        } else {
+            img.removeAttribute('src');
+            banner.classList.add('hidden');
+        }
+    }
+}
 
 // ---------- Sketch pad ----------
 
@@ -810,7 +1151,7 @@ async function saveSketch() {
         let blob = await canvasToBlob(sketch.canvas, 'image/webp', 0.9);
         if (!blob || blob.type !== 'image/webp') blob = await canvasToBlob(sketch.canvas, 'image/png');
         const imageId = await uploadImage(blob);
-        const column = document.getElementById('sketch-column').value;
+        const column = document.getElementById('sketch-column').value || null;
         socket.emit('addImage', { imageId, type: 'sketch', ...freeSpot(column) });
         closeSketch();
     } catch (error) {
@@ -888,6 +1229,7 @@ socket.on('connect_error', (error) => {
 socket.on('loadCards', ({ cards: allCards }) => loadAllCards(allCards));
 socket.on('cardUpserted', ({ card }) => upsertCard(card));
 socket.on('cardRemoved', ({ cardId }) => removeCard(cardId));
+socket.on('columnHeaders', ({ headers }) => renderHeaders(headers));
 
 socket.on('participantJoined', ({ name }) => {
     participants.add(name);
@@ -906,3 +1248,5 @@ socket.on('updateParticipants', ({ participants: participantsList }) => {
 
 buildBoard();
 buildSketchTools();
+updateSurfaceHeights();
+initViewport();

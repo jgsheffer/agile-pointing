@@ -65,42 +65,53 @@
       </div>
     </nav>
 
-    <main class="pt-20 px-4 pb-10">
-      <div class="max-w-screen-2xl mx-auto" id="retro-content">
-        <div class="glass p-4 sm:p-6 mb-4">
-          <div class="flex flex-wrap justify-between items-center gap-4">
-            <h1 class="text-2xl font-bold">Sprint Retrospective</h1>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" onclick="resetRetro()" class="md-btn md-btn-ghost px-3 py-2">
-                <span class="material-icons">refresh</span>
-                Reset
-              </button>
-              <button type="button" onclick="toggleTimer()" id="timer-btn" class="md-btn md-btn-ghost px-3 py-2">
-                <span class="material-icons">timer</span>
-                Start Timer (5:00)
-              </button>
-              <button type="button" onclick="groupSimilarCards()" class="md-btn md-btn-primary px-3 py-2">
-                <span class="material-icons">group_work</span>
-                Group Similar
-              </button>
-            </div>
-          </div>
-          <div id="timer-display" class="text-2xl font-bold text-center mt-4 hidden"></div>
-
-          <div class="flex flex-wrap items-center gap-4 mt-5">
-            <span class="text-sm text-gray-300">Grab a sticky and drop it on the board:</span>
-            <div id="sticky-pad" class="flex flex-wrap gap-3" role="group" aria-label="Sticky note colors"></div>
-            <span class="text-xs text-gray-400">
-              Drop or paste images anywhere · ✏️ sketch from a column
-            </span>
-          </div>
+    <main class="retro-main">
+      <div class="glass retro-toolbar">
+        <h1 class="text-xl font-bold whitespace-nowrap">Sprint Retrospective</h1>
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="text-sm text-gray-300 hidden md:inline whitespace-nowrap">Drag a sticky onto the board</span>
+          <div id="sticky-pad" class="flex gap-2" role="group" aria-label="Sticky note colors"></div>
         </div>
+        <div id="timer-display" class="text-2xl font-bold hidden"></div>
+        <div class="flex flex-wrap gap-2 ml-auto">
+          <button type="button" onclick="resetRetro()" class="md-btn md-btn-ghost px-3 py-2">
+            <span class="material-icons">refresh</span>
+            <span class="hidden sm:inline">Reset</span>
+          </button>
+          <button type="button" onclick="toggleTimer()" id="timer-btn" class="md-btn md-btn-ghost px-3 py-2">
+            <span class="material-icons">timer</span>
+            <span class="hidden sm:inline">Start Timer (5:00)</span>
+          </button>
+          <button type="button" onclick="groupSimilarCards()" class="md-btn md-btn-primary px-3 py-2">
+            <span class="material-icons">group_work</span>
+            <span class="hidden sm:inline">Group Similar</span>
+          </button>
+        </div>
+      </div>
 
-        <div id="board" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+      <div id="board-viewport" class="board-viewport glass" aria-label="Retro board. Scroll to zoom, drag empty space to pan.">
+        <div id="board-world" class="board-world">
+          <div id="board" class="board-columns"></div>
+          <div id="items-layer" class="items-layer"></div>
+        </div>
+        <div class="zoom-controls" role="group" aria-label="Zoom">
+          <button type="button" class="icon-btn" onclick="zoomBy(1 / 1.25)" title="Zoom out (-)" aria-label="Zoom out">
+            <span class="material-icons">remove</span>
+          </button>
+          <button type="button" id="zoom-level" class="zoom-level" onclick="setZoom(1)" title="Reset to 100% (1)">100%</button>
+          <button type="button" class="icon-btn" onclick="zoomBy(1.25)" title="Zoom in (+)" aria-label="Zoom in">
+            <span class="material-icons">add</span>
+          </button>
+          <button type="button" class="icon-btn" onclick="fitBoard()" title="Fit the board (0)" aria-label="Fit the board">
+            <span class="material-icons">fit_screen</span>
+          </button>
+        </div>
+        <div class="board-hint">Scroll to zoom · drag empty space to pan · drop images or stickies anywhere</div>
       </div>
     </main>
 
     <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" multiple />
+    <input type="file" id="header-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
 
     <div id="sketch-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sketch-title">
       <div class="modal p-4 sm:p-6">

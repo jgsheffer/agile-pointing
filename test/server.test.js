@@ -561,7 +561,7 @@ describe('retro', () => {
     assert.equal(cards.length, 2);
     assert.deepEqual(
       { column: cards[0].column, color: cards[0].color, x: cards[0].x, y: cards[0].y },
-      { column: 'kudos', color: 'pink', x: 1, y: 120 }
+      { column: 'kudos', color: 'pink', x: 1.7, y: 120 }
     );
     assert.equal(cards[0].author, 'Anon Panda');
     assert.equal(cards[1].color, 'yellow');
@@ -579,6 +579,43 @@ describe('retro', () => {
     assert.equal(card.x, 0.25);
     assert.equal(card.y, 300);
     assert.equal(card.z, 3);
+  });
+
+  test('places items anywhere on the board, outside the columns too', async () => {
+    const socket = await joinRetro(instance.url, 'RETRO-FREE', 'Anon Ibis');
+    const cardId = await addCard(socket, { column: null, x: 4200, y: 99999 });
+    const card = instance.retroRooms.get('RETRO-FREE').cards[0];
+    assert.equal(card.id, cardId);
+    assert.equal(card.column, null);
+    assert.equal(card.x, 4200);
+    assert.equal(card.y, 20000);
+
+    const moved = waitFor(socket, 'cardUpserted', ({ card: c }) => c.column === 'improve');
+    socket.emit('moveCard', { cardId, column: 'improve', x: 900, y: 300 });
+    await moved;
+    const freed = waitFor(socket, 'cardUpserted', ({ card: c }) => c.column === null);
+    socket.emit('moveCard', { cardId, column: null, x: -50, y: 10 });
+    assert.equal((await freed).card.x, 0);
+  });
+
+  test('resizes notes freely and images by width only, within limits', async () => {
+    const socket = await joinRetro(instance.url, 'RETRO-SIZE', 'Anon Yak');
+    const noteId = await addCard(socket, { column: 'went-well' });
+
+    let resized = waitFor(socket, 'cardUpserted', ({ card }) => card.w !== null);
+    socket.emit('resizeCard', { cardId: noteId, w: 5000, h: 10 });
+    assert.deepEqual(
+      (({ w, h }) => ({ w, h }))((await resized).card),
+      { w: 1600, h: 80 }
+    );
+
+    const { body } = await upload('RETRO-SIZE');
+    const imageId = await new Promise((resolve) =>
+      socket.emit('addImage', { imageId: body.id, type: 'image', column: null, x: 10, y: 10 }, resolve)
+    );
+    resized = waitFor(socket, 'cardUpserted', ({ card }) => card.id === imageId && card.w === 480);
+    socket.emit('resizeCard', { cardId: imageId, w: 480, h: 900 });
+    assert.equal((await resized).card.h, null);
   });
 
   test('ignores card events from sockets that have not joined', async () => {
@@ -670,6 +707,44 @@ describe('retro', () => {
       headers: { cookie: COOKIE },
     });
     assert.equal(gone.status, 404);
+  });
+
+  test('sets, replaces and removes column header images, keeping them on reset', async () => {
+    const socket = await joinRetro(instance.url, 'RETRO-HEAD', 'Anon Crow');
+    const imageStatus = async (id) =>
+      (await fetch(`${instance.url}/api/retro-images/${id}`, { headers: { cookie: COOKIE } })).status;
+
+    const first = (await upload('RETRO-HEAD')).body.id;
+    let headers = waitFor(socket, 'columnHeaders', (h) => h.headers.kudos === first);
+    socket.emit('setColumnImage', { column: 'kudos', imageId: first });
+    await headers;
+
+    // Header images can't also be placed as cards
+    socket.emit('addImage', { imageId: first, type: 'image', column: 'kudos' });
+    socket.emit('setColumnImage', { column: 'nope', imageId: first });
+
+    const second = (await upload('RETRO-HEAD')).body.id;
+    headers = waitFor(socket, 'columnHeaders', (h) => h.headers.kudos === second);
+    socket.emit('setColumnImage', { column: 'kudos', imageId: second });
+    await headers;
+    assert.equal(await imageStatus(first), 404);
+    assert.equal(instance.retroRooms.get('RETRO-HEAD').cards.length, 0);
+
+    const reset = waitFor(socket, 'loadCards');
+    socket.emit('resetRetro');
+    await reset;
+    assert.equal(await imageStatus(second), 200);
+
+    // A newcomer gets the headers when joining
+    const late = connect(instance.url);
+    const lateHeaders = waitFor(late, 'columnHeaders');
+    late.emit('joinRetro', { room: 'RETRO-HEAD', name: 'Anon Late' });
+    assert.equal((await lateHeaders).headers.kudos, second);
+
+    headers = waitFor(socket, 'columnHeaders', (h) => h.headers.kudos === null);
+    socket.emit('setColumnImage', { column: 'kudos', imageId: null });
+    await headers;
+    assert.equal(await imageStatus(second), 404);
   });
 
   test('rejects images over the size limit', async () => {
