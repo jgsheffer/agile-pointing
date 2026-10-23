@@ -1,15 +1,29 @@
 // pointing.js
-const socket = io();
+// Connect only once access.js confirms the access cookie is valid
+const socket = io({ autoConnect: false });
+window.addEventListener('access-granted', () => {
+  if (!socket.connected) socket.connect();
+});
+socket.on('connect_error', (error) => {
+  if (error.message === 'unauthorized') {
+    showAccessForm();
+  }
+});
+
 // Update the currentRoom initialization to use URL parameters
 let currentRoom = new URLSearchParams(window.location.search).get('room') || '';
 let selectedAvatar = '';
 let selectedAvatarType = 'emoji';
 let sessionId = localStorage.getItem('sessionId');
+// Details sent with the last joinRoom, used to rejoin after a reconnect
+let joinedWith = null;
+// Avatars are only sent when the participant list changes, so keep them by id
+const avatarCache = new Map();
 const emojis = ['😀', '😎', '🤓', '🦄', '🐱', '🐶', '🦊', '🐸', '🐼', '🐯'];
 const fibonacciSequence = [1, 2, 3, 5, 8, 13, 'Pass'];
 
-// Define approved voting values
-const approvedVoteValues = [1, 2, 3, 5, 8, 13, 'Pass'];
+const AVATAR_SIZE = 128;
+const MAX_GIF_SIZE = 256 * 1024; // GIFs are sent as-is to keep the animation
 
 // Initialize audio context and sound effect
 let voteSound = null;
@@ -66,16 +80,50 @@ function regenerateAvatar() {
   selectedAvatar = avatarUrl;
 }
 
-function handleCustomAvatarUpload(event) {
+function readAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Crop to a square and shrink so the avatar stays small enough to share
+function resizeImage(file, size = AVATAR_SIZE) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const scale = Math.max(size / image.width, size / image.height);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      canvas
+        .getContext('2d')
+        .drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
+      URL.revokeObjectURL(url);
+
+      const webp = canvas.toDataURL('image/webp', 0.85);
+      resolve(
+        webp.startsWith('data:image/webp')
+          ? webp
+          : canvas.toDataURL('image/png')
+      );
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image'));
+    };
+    image.src = url;
+  });
+}
+
+async function handleCustomAvatarUpload(event) {
   const file = event.target.files[0];
   if (file) {
-    // Check file size (limit to 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      alert('File size must be less than 5MB');
-      return;
-    }
-
     // Check file type
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
@@ -83,26 +131,37 @@ function handleCustomAvatarUpload(event) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const img = document.getElementById('custom-image');
-      img.src = e.target.result;
-      selectedAvatar = e.target.result;
-      selectedAvatarType = 'custom';
-      document.getElementById('custom-preview').classList.remove('hidden');
+    const isGif = file.type === 'image/gif';
+    if (isGif && file.size > MAX_GIF_SIZE) {
+      alert('Animated GIFs must be smaller than 256 KB');
+      return;
+    }
 
-      // Store the custom avatar data in localStorage
-      localStorage.setItem('customAvatarData', e.target.result);
-      localStorage.setItem('customAvatarType', file.type);
+    let dataUrl;
+    try {
+      dataUrl = isGif ? await readAsDataURL(file) : await resizeImage(file);
+    } catch (error) {
+      console.error('Avatar upload failed:', error);
+      alert('Could not read that image. Please try another one.');
+      return;
+    }
 
-      // For GIFs, ensure proper animation display
-      if (file.type === 'image/gif') {
-        img.style.imageRendering = 'auto';
-        // Remove any existing background to ensure GIF transparency works
-        img.parentElement.style.background = 'none';
-      }
-    };
-    reader.readAsDataURL(file);
+    const img = document.getElementById('custom-image');
+    img.src = dataUrl;
+    selectedAvatar = dataUrl;
+    selectedAvatarType = 'custom';
+    document.getElementById('custom-preview').classList.remove('hidden');
+
+    // Store the custom avatar data in localStorage
+    localStorage.setItem('customAvatarData', dataUrl);
+    localStorage.setItem('customAvatarType', file.type);
+
+    // For GIFs, ensure proper animation display
+    if (isGif) {
+      img.style.imageRendering = 'auto';
+      // Remove any existing background to ensure GIF transparency works
+      img.parentElement.style.background = 'none';
+    }
   }
 }
 
@@ -179,20 +238,24 @@ function updateRoomHeader(roomId, show = true) {
 }
 
 function joinRoom() {
-  const name = document.getElementById('name').value;
-  const room = document.getElementById('room').value || currentRoom;
+  const name = document.getElementById('name').value.trim();
+  const room = (document.getElementById('room').value || currentRoom).trim();
   if (name && room && selectedAvatar) {
+    if (!/^[\w -]{1,64}$/.test(room)) {
+      alert('Room IDs can only use letters, numbers, spaces, - and _.');
+      return;
+    }
     // Update URL with room parameter
-    const newUrl = `${window.location.pathname}?room=${room}`;
+    const newUrl = `${window.location.pathname}?room=${encodeURIComponent(room)}`;
     window.history.pushState({}, '', newUrl);
     currentRoom = room;
-    socket.emit('joinRoom', {
+    joinedWith = {
       room,
       name,
       avatar: selectedAvatar,
       avatarType: selectedAvatarType,
-      sessionId,
-    });
+    };
+    socket.emit('joinRoom', { ...joinedWith, sessionId });
     document.getElementById('join-form').classList.add('hidden');
     document.getElementById('voting-area').classList.remove('hidden');
     updateRoomHeader(room, true);
@@ -210,13 +273,13 @@ function joinRoom() {
   }
 }
 function leaveRoom() {
-  socket.emit('leaveRoom', { room: currentRoom, sessionId });
+  socket.emit('leaveRoom');
   currentRoom = '';
+  joinedWith = null;
+  avatarCache.clear();
+  clearVoteUI();
   document.getElementById('voting-area').classList.add('hidden');
   document.getElementById('join-form').classList.remove('hidden');
-  document.getElementById('results').classList.add('hidden');
-  document.getElementById('consensus').classList.add('hidden');
-  document.getElementById('giphy-image').classList.add('hidden');
   updateRoomHeader('', false);
   localStorage.removeItem('pokerSession');
   localStorage.removeItem('customAvatarData');
@@ -225,23 +288,12 @@ function leaveRoom() {
 
 // Voting functionality
 let currentVote = null;
-
-// Function to validate if a vote value is approved
-function isValidVote(value) {
-  // Check if the value is in the approved list
-  // Handle both string and number comparisons
-  const isValid = approvedVoteValues.some((approvedValue) => {
-    if (typeof approvedValue === 'number' && typeof value === 'number') {
-      return approvedValue === value;
-    }
-    return approvedValue === value;
-  });
-
-  return isValid ? value : 'Cheater';
-}
+// Bumped on every reset so late async results from an earlier round are dropped
+let voteRound = 0;
 
 function vote(value) {
   const previousVote = currentVote;
+  currentVote = value;
 
   // Update UI to show selected vote with enhanced animations
   document.querySelectorAll('.vote-button').forEach((button) => {
@@ -294,7 +346,7 @@ function vote(value) {
     'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAEAAABVgANTU1NTU1Q0NDQ0NDUVFRUVFRXl5eXl5ea2tra2tra3l5eXl5eYaGhoaGhpSUlJSUlKGhoaGhoaGvr6+vr6+8vLy8vLzKysrKysrX19fX19fX5OTk5OTk8vLy8vLy////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQCgAAAAAAAAAVY82AhbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAALACwAAP/AADwQKVE9YWDGPkQWpT66yk4+zIiYPoTUaT3tnU+OkZUwY0ZIg/oGjvxzqX6qufq9+vRJBW/WtaRBQlT0LXqWvQ5BDm8Wn0CRQoUCCv7zP6N/qv//7vRAGKwjkHhGQf/8I5F4RyL/8QDg4OAaEf/yDguBwcAwI/l/5cHBwcA0D//5cHBwcA4CAh+D/+XBwcHAMDAwPwf/yg//5QEP/+MYxA8L0DU0A/9IADD4nB8Hg+D4nB8EDweD4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nB8Hg+D4nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxB8AAANIAAAAABYAAVERAAqIiIAAEREACIiIgABEREQAAiIiIAAREREAAIiIiAAAREREAAIiIiAAARERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
   );
   audio.volume = 0.2;
-  audio.play();
+  audio.play().catch(() => {}); // Browsers block sound until the user interacts
 
   // If this is a new vote (not just deselecting), add some particle effects
   if (previousVote !== value) {
@@ -337,33 +389,89 @@ function vote(value) {
       }, 500);
     }
   }
-  console.log('isValidVote(value)', isValidVote(value));
-  socket.emit('vote', {
-    room: currentRoom,
-    vote: isValidVote(value),
-    sessionId,
-  });
+  socket.emit('vote', { vote: value });
 }
 
 function revealVotes() {
-  socket.emit('revealVotes', currentRoom);
+  socket.emit('revealVotes');
 }
 
 function resetVotes() {
+  socket.emit('resetVotes');
+}
+
+// Random celebration GIF from GIPHY via the server, or one from the static list
+async function getCelebrationGif() {
+  try {
+    const response = await fetch('/api/celebration-gif');
+    if (response.ok) {
+      const { url } = await response.json();
+      if (url) return url;
+    }
+  } catch (error) {
+    console.error('Could not fetch a celebration GIF:', error);
+  }
+  return celebrationGifs[Math.floor(Math.random() * celebrationGifs.length)];
+}
+
+// Clears this client's selection and results; runs for everyone on a reset
+function clearVoteUI() {
+  voteRound++;
   currentVote = null;
   document.querySelectorAll('.vote-button').forEach((button) => {
     button.classList.remove('selected');
+    button.style.transform = 'scale(1)';
   });
-  socket.emit('resetVotes', currentRoom);
   document.getElementById('results').classList.add('hidden');
   document.getElementById('consensus').classList.add('hidden');
   document.getElementById('giphy-image').classList.add('hidden');
 }
 
-function updateParticipantList(participants, revealed = false) {
+function createIcon(name, className) {
+  const icon = document.createElement('span');
+  icon.className = `material-icons ${className}`;
+  icon.textContent = name;
+  return icon;
+}
+
+function createAvatarElement(avatar, avatarType) {
+  const container = document.createElement('div');
+  container.className =
+    'flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300 overflow-hidden';
+
+  if (avatarType === 'emoji') {
+    container.textContent = avatar;
+  } else if (avatarType === 'dicebear' || avatarType === 'custom') {
+    const img = document.createElement('img');
+    img.src = avatar;
+    img.alt = 'Avatar';
+    img.className = 'w-full h-full object-cover';
+
+    // For GIFs, remove background gradient and adjust container
+    if (avatarType === 'custom' && avatar.startsWith('data:image/gif;')) {
+      container.classList.remove(
+        'bg-gradient-to-br',
+        'from-blue-400',
+        'to-purple-500'
+      );
+      container.classList.add('bg-transparent');
+      img.className = 'w-full h-full object-contain';
+      img.style.imageRendering = 'auto';
+    }
+    container.appendChild(img);
+  }
+  return container;
+}
+
+function updateParticipantList({ participants, revealed }) {
   const participantsDiv = document.getElementById('participants');
   participantsDiv.innerHTML = '';
   participants.forEach((p) => {
+    if (p.avatar !== undefined) {
+      avatarCache.set(p.id, { avatar: p.avatar, avatarType: p.avatarType });
+    }
+    const { avatar = '', avatarType } = avatarCache.get(p.id) ?? {};
+
     const div = document.createElement('div');
     div.className =
       'participant modern-card p-6 flex items-center space-x-4 transform transition-all duration-300 hover:scale-105';
@@ -372,45 +480,28 @@ function updateParticipantList(participants, revealed = false) {
     const delay = Math.random() * 0.5;
     div.style.animationDelay = `${delay}s`;
 
-    const voteStatus = p.vote
-      ? revealed
-        ? `<span class="text-2xl font-bold gradient-text">${p.vote}</span>`
-        : '<span class="material-icons text-green-400 animate-pulse">check_circle</span>'
-      : '<span class="material-icons text-gray-400 float-animation">help_outline</span>';
-
-    // Handle different avatar types
-    let avatarContent;
-    let avatarContainerClass =
-      'flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300 overflow-hidden';
-
-    if (p.avatarType === 'emoji') {
-      avatarContent = p.avatar;
-    } else if (p.avatarType === 'dicebear') {
-      avatarContent = `<img src="${p.avatar}" class="w-full h-full object-cover" alt="Avatar">`;
-    } else if (p.avatarType === 'custom') {
-      // Check if the avatar is a GIF by looking at the data URL
-      const isGif = p.avatar.startsWith('data:image/gif;');
-      if (isGif) {
-        // For GIFs, remove background gradient and adjust container
-        avatarContainerClass =
-          'flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl transform hover:rotate-12 transition-transform duration-300 overflow-hidden bg-transparent';
-        avatarContent = `<img src="${p.avatar}" class="w-full h-full object-contain" style="image-rendering: auto;" alt="Avatar">`;
-      } else {
-        avatarContent = `<img src="${p.avatar}" class="w-full h-full object-cover" alt="Avatar">`;
-      }
+    let voteStatus;
+    if (revealed && p.vote !== null) {
+      voteStatus = document.createElement('span');
+      voteStatus.className = 'text-2xl font-bold gradient-text';
+      voteStatus.textContent = p.vote;
+    } else if (p.hasVoted) {
+      voteStatus = createIcon('check_circle', 'text-green-400 animate-pulse');
+    } else {
+      voteStatus = createIcon('help_outline', 'text-gray-400 float-animation');
     }
 
-    div.innerHTML = `
-      <div class="${avatarContainerClass}">
-        ${avatarContent}
-      </div>
-      <span class="font-medium text-lg">${p.name}</span>
-      <span class="ml-auto">
-        ${voteStatus}
-      </span>
-    `;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'font-medium text-lg';
+    nameSpan.textContent = p.name;
 
-    if (p.vote) {
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'ml-auto';
+    statusSpan.appendChild(voteStatus);
+
+    div.append(createAvatarElement(avatar, avatarType), nameSpan, statusSpan);
+
+    if (p.hasVoted) {
       div.classList.add('voted');
       // Add a subtle glow effect for voted participants
       div.style.boxShadow = '0 0 15px rgba(74, 222, 128, 0.2)';
@@ -543,15 +634,20 @@ function calculateAndDisplayResults(participants) {
     }, 250);
 
     // Show celebration GIF with fade-in effect
-    const randomIndex = Math.floor(Math.random() * celebrationGifs.length);
-    giphyImage.src = celebrationGifs[randomIndex];
-    giphyImage.style.opacity = '0';
-    giphyImage.classList.remove('hidden');
+    const round = voteRound;
+    getCelebrationGif().then((url) => {
+      // Votes were reset while the GIF was loading
+      if (round !== voteRound) return;
 
-    setTimeout(() => {
-      giphyImage.style.transition = 'opacity 0.5s ease-in';
-      giphyImage.style.opacity = '1';
-    }, 100);
+      giphyImage.src = url;
+      giphyImage.style.opacity = '0';
+      giphyImage.classList.remove('hidden');
+
+      setTimeout(() => {
+        giphyImage.style.transition = 'opacity 0.5s ease-in';
+        giphyImage.style.opacity = '1';
+      }, 100);
+    });
   } else {
     consensusDiv.classList.add('hidden');
 
@@ -637,21 +733,34 @@ socket.on('sessionCreated', (newSessionId) => {
   localStorage.setItem('sessionId', sessionId);
 });
 
-socket.on('updateParticipants', (participants) => {
-  updateParticipantList(participants);
+socket.on('joinError', (message) => {
+  alert(message);
+  leaveRoom();
 });
 
-socket.on('updateVotes', (participants) => {
-  updateParticipantList(participants);
+// Rejoin after a dropped connection so the server knows which room we're in
+socket.io.on('reconnect', () => {
+  if (joinedWith) {
+    socket.emit('joinRoom', { ...joinedWith, sessionId });
+  }
 });
 
-socket.on('votesRevealed', (participants) => {
-  updateParticipantList(participants, true);
-  calculateAndDisplayResults(participants);
+socket.on('updateParticipants', (state) => {
+  updateParticipantList(state);
 });
 
-socket.on('votesReset', (participants) => {
-  updateParticipantList(participants);
+socket.on('updateVotes', (state) => {
+  updateParticipantList(state);
+});
+
+socket.on('votesRevealed', (state) => {
+  updateParticipantList(state);
+  calculateAndDisplayResults(state.participants);
+});
+
+socket.on('votesReset', (state) => {
+  clearVoteUI();
+  updateParticipantList(state);
 });
 
 // Input field effects

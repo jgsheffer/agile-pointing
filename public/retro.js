@@ -1,12 +1,27 @@
 // retro.js
 
 const socket = io({
+    autoConnect: false,
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     reconnectionAttempts: Infinity,
     timeout: 10000
 });
+
+// The access code is entered on the main page, which sends us back here after
+function redirectToAccessForm() {
+    const next = window.location.pathname + window.location.search;
+    window.location.href = `/?next=${encodeURIComponent(next)}`;
+}
+
+fetch('/access-status')
+    .then(response => response.json())
+    .then(data => data.valid ? socket.connect() : redirectToAccessForm())
+    .catch(error => {
+        console.error('Error checking access:', error);
+        document.getElementById('loading-overlay').textContent = 'Connection error. Please refresh the page.';
+    });
 
 // Core variables
 let userName = '';
@@ -20,7 +35,7 @@ function generateRoomId() {
 }
 
 let roomId = new URLSearchParams(window.location.search).get('room');
-if (!roomId) {
+if (!roomId || !/^[\w -]{1,64}$/.test(roomId)) {
     roomId = generateRoomId();
     const newUrl = `${window.location.pathname}?room=${roomId}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
@@ -48,7 +63,7 @@ function updateRoomDisplay() {
 }
 
 function copyRoomLink() {
-    const roomLink = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+    const roomLink = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomId)}`;
     navigator.clipboard.writeText(roomLink).then(() => {
         const button = document.querySelector('button[onclick="copyRoomLink()"]');
         const originalIcon = button.textContent;
@@ -64,6 +79,7 @@ async function downloadPDF() {
     const pdfButton = document.querySelector('button[onclick="downloadPDF()"]');
     const originalContent = pdfButton.innerHTML;
     pdfButton.innerHTML = '<span class="material-icons">hourglass_top</span>Generating...';
+    const container = document.createElement('div');
     
     try {
         const contentClone = document.querySelector('#retro-content').cloneNode(true);
@@ -83,7 +99,6 @@ async function downloadPDF() {
             textarea.parentNode.replaceChild(div, textarea);
         });
 
-        const container = document.createElement('div');
         container.style.background = 'white';
         container.style.padding = '20px';
         container.style.color = 'black';
@@ -136,7 +151,7 @@ async function downloadPDF() {
         console.error('PDF generation failed:', error);
         alert('Failed to generate PDF. Please try again.');
     } finally {
-        document.body.removeChild(container);
+        container.remove();
         pdfButton.innerHTML = originalContent;
     }
 }
@@ -200,14 +215,17 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
     controlsDiv.className = 'flex items-center space-x-2 ml-2';
 
     if (isSubmitted) {
-        controlsDiv.innerHTML = `
-            <button onclick="voteCard('${id}')" class="vote-count px-2 py-1 rounded">
-                👍 ${votes}
-            </button>
-            <button onclick="deleteCard('${id}')" class="material-icons text-red-400 hover:text-red-300">
-                delete
-            </button>
-        `;
+        const voteBtn = document.createElement('button');
+        voteBtn.className = 'vote-count px-2 py-1 rounded';
+        voteBtn.textContent = `👍 ${votes}`;
+        voteBtn.addEventListener('click', () => voteCard(id));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'material-icons text-red-400 hover:text-red-300';
+        deleteBtn.textContent = 'delete';
+        deleteBtn.addEventListener('click', () => deleteCard(id));
+
+        controlsDiv.append(voteBtn, deleteBtn);
     }
 
     const contentDiv = document.createElement('div');
@@ -226,7 +244,7 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
         const submitBtn = document.createElement('button');
         submitBtn.className = 'submit-button px-4 py-2 rounded';
         submitBtn.innerHTML = '<span class="material-icons">send</span>Submit';
-        submitBtn.onclick = () => submitCard(id, textarea.value, card);
+        submitBtn.onclick = () => submitCard(id, textarea.value);
         
         submitBtnContainer.appendChild(submitBtn);
         card.appendChild(submitBtnContainer);
@@ -249,59 +267,27 @@ function createCard(content, id, votes = 0, author = userName, groupedCards = []
         card.appendChild(groupedDiv);
     }
 
-    setTimeout(() => {
-        autoResize(textarea);
-        if (!content && !isSubmitted) {
-            textarea.focus();
-        }
-    }, 0);
+    textarea.addEventListener('input', () => autoResize(textarea));
+    setTimeout(() => autoResize(textarea), 0);
 
     return card;
 }
 
 function addCard(columnId) {
-    const cardId = Date.now().toString();
-    const card = {
-        id: cardId,
-        content: '',
-        column: columnId,
-        votes: 0,
-        author: userName,
-        voters: []
-    };
-    
-    const column = document.getElementById(columnId);
-    column.appendChild(createCard('', cardId, 0, userName, [], false));
-    
-    socket.emit('addCard', { room: roomId, card });
+    // The server creates the card and replies with its id once it's on screen
+    socket.emit('addCard', { column: columnId }, (cardId) => {
+        const textarea = document.querySelector(`[data-id="${CSS.escape(cardId)}"] textarea`);
+        if (textarea) textarea.focus();
+    });
 }
 
-function submitCard(cardId, content, cardElement) {
+function submitCard(cardId, content) {
     if (!content.trim()) {
         alert('Please enter some content before submitting.');
         return;
     }
     
-    const textarea = cardElement.querySelector('textarea');
-    const submitBtn = cardElement.querySelector('.submit-button');
-    const controlsDiv = cardElement.querySelector('.flex.items-center');
-    
-    textarea.disabled = true;
-    if (submitBtn) {
-        submitBtn.parentElement.remove();
-    }
-    
-    controlsDiv.innerHTML = `
-        <button onclick="voteCard('${cardId}')" class="vote-count px-2 py-1 rounded">
-            👍 0
-        </button>
-        <button onclick="deleteCard('${cardId}')" class="material-icons text-red-400 hover:text-red-300">
-            delete
-        </button>
-    `;
-    
     socket.emit('submitCard', {
-        room: roomId,
         cardId: cardId,
         content: content.trim()
     });
@@ -309,18 +295,22 @@ function submitCard(cardId, content, cardElement) {
 
 function deleteCard(cardId) {
     if (confirm('Are you sure you want to delete this card?')) {
-        socket.emit('deleteCard', { room: roomId, cardId });
+        socket.emit('deleteCard', { cardId });
     }
 }
 
 function voteCard(cardId) {
-    socket.emit('voteCard', { room: roomId, cardId, voter: userName });
+    socket.emit('voteCard', { cardId });
 }
 
 function resetRetro() {
     if (confirm('Are you sure you want to reset the retro? This will clear all cards for everyone.')) {
-        socket.emit('resetRetro', { room: roomId });
+        socket.emit('resetRetro');
     }
+}
+
+function groupSimilarCards() {
+    socket.emit('groupSimilarCards');
 }
 
 function autoResize(textarea) {
@@ -343,12 +333,11 @@ socket.on('disconnect', () => {
     document.getElementById('loading-overlay').textContent = 'Reconnecting...';
 });
 
-socket.on('reconnect', (attemptNumber) => {
-    console.log('Reconnected after', attemptNumber, 'attempts');
-    socket.emit('joinRetro', { room: roomId, name: userName });
-});
-
-socket.on('error', (error) => {
+socket.on('connect_error', (error) => {
+    if (error.message === 'unauthorized') {
+        redirectToAccessForm();
+        return;
+    }
     console.error('Socket error:', error);
     document.getElementById('loading-overlay').textContent = 'Connection error. Please refresh the page.';
 });
@@ -375,6 +364,15 @@ socket.on('updateParticipants', ({ participants: participantsList }) => {
 
 // Card display update
 function updateCardsDisplay(cards) {
+    // Keep anything typed into unsubmitted cards across re-renders
+    const drafts = new Map();
+    let focusedId = null;
+    document.querySelectorAll('.card[data-id] textarea:not(:disabled)').forEach(textarea => {
+        const id = textarea.closest('.card').dataset.id;
+        drafts.set(id, textarea.value);
+        if (document.activeElement === textarea) focusedId = id;
+    });
+
     ['went-well', 'improve', 'action-items'].forEach(columnId => {
         const column = document.getElementById(columnId);
         column.innerHTML = '';
@@ -383,7 +381,7 @@ function updateCardsDisplay(cards) {
             .sort((a, b) => b.votes - a.votes)
             .forEach(card => {
                 column.appendChild(createCard(
-                    card.content,
+                    card.isSubmitted ? card.content : (drafts.get(card.id) ?? card.content),
                     card.id,
                     card.votes,
                     card.author,
@@ -394,6 +392,14 @@ function updateCardsDisplay(cards) {
     });
 
     document.querySelectorAll('textarea').forEach(autoResize);
+
+    if (focusedId) {
+        const textarea = document.querySelector(`[data-id="${CSS.escape(focusedId)}"] textarea`);
+        if (textarea) {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+    }
 }
 
 // Initialize drag and drop
@@ -409,7 +415,6 @@ const drake = dragula([
     }
 }).on('drop', function (el, target, source) {
     socket.emit('moveCard', {
-        room: roomId,
         cardId: el.dataset.id,
         newColumn: target.id
     });

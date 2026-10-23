@@ -1,23 +1,50 @@
-function checkAccessCode() {
-  // Check if access code cookie exists
-  const accessCodeCookie = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith('accessCode='));
+// Access is decided by the server via an httpOnly cookie, so the client only
+// asks whether it has access and reacts to the answer.
 
-  if (accessCodeCookie) {
-    // Cookie exists, hide access form and show main content
-    document.getElementById('access-form').style.display = 'none';
-    document.getElementById('main-content').style.display = 'block';
-    return;
-  }
+function showMainContent() {
+  document.getElementById('access-form').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+  // Pages listen for this to open their socket connection
+  window.dispatchEvent(new Event('access-granted'));
+}
 
-  // Show access form, hide main content
+function showAccessForm() {
   document.getElementById('access-form').style.display = 'block';
   document.getElementById('main-content').style.display = 'none';
   // Change the text color to white
   document.getElementById('access-code-input').style.color = '#FFFFFF';
   // Ensure input displays as plain text, not password
   document.getElementById('access-code-input').type = 'text';
+}
+
+// Only follow same-site paths, never "//other-host" style redirects
+function getRedirectTarget() {
+  const next = new URLSearchParams(window.location.search).get('next');
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+}
+
+function checkAccessCode() {
+  // Clear the old client-side cookie from before access was enforced server-side
+  document.cookie = 'accessCode=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+
+  fetch('/access-status')
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.valid) {
+        const next = getRedirectTarget();
+        if (next) {
+          window.location.href = next;
+          return;
+        }
+        showMainContent();
+      } else {
+        showAccessForm();
+      }
+    })
+    .catch((error) => {
+      console.error('Error checking access:', error);
+      showAccessForm();
+    });
 }
 
 function submitAccessCode() {
@@ -30,27 +57,34 @@ function submitAccessCode() {
     },
     body: JSON.stringify({ accessCode }),
   })
-    .then((response) => response.json())
+    .then((response) => {
+      if (response.status === 429) {
+        throw new Error('Too many attempts');
+      }
+      return response.json();
+    })
     .then((data) => {
       if (data.valid) {
-        // Set cookie that expires in 365 days
-        const d = new Date();
-        d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
-        document.cookie = `accessCode=true; expires=${d.toUTCString()}; path=/`;
-
-        // Show main content
-        document.getElementById('access-form').style.display = 'none';
-        document.getElementById('main-content').style.display = 'block';
-
         // Clear input
         document.getElementById('access-code-input').value = '';
+
+        const next = getRedirectTarget();
+        if (next) {
+          window.location.href = next;
+          return;
+        }
+        showMainContent();
       } else {
         alert('Invalid access code. Please try again.');
       }
     })
     .catch((error) => {
       console.error('Error:', error);
-      alert('An error occurred. Please try again.');
+      alert(
+        error.message === 'Too many attempts'
+          ? 'Too many attempts. Please wait a few minutes and try again.'
+          : 'An error occurred. Please try again.'
+      );
     });
 }
 
