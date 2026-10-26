@@ -146,6 +146,15 @@ describe('access control', () => {
       assert.deepEqual(await status.json(), { valid: true });
     });
 
+    test('logout clears the access cookie', async () => {
+      const res = await fetch(`${instance.url}/logout`, {
+        method: 'POST',
+        headers: { cookie: COOKIE },
+      });
+      assert.deepEqual(await res.json(), { ok: true });
+      assert.match(res.headers.get('set-cookie'), /agileAccess=;.*Expires=Thu, 01 Jan 1970/);
+    });
+
     test('ignores the old client-side accessCode cookie', async () => {
       const status = await fetch(`${instance.url}/access-status`, {
         headers: { cookie: 'accessCode=true' },

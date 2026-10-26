@@ -442,6 +442,12 @@ function createServer({
     res.json({ valid: true });
   });
 
+  // Used by pages to sign out browsers holding data from an older version
+  app.post('/logout', (req, res) => {
+    res.clearCookie(ACCESS_COOKIE, { path: '/' });
+    res.json({ ok: true });
+  });
+
   const randomGif = createGifPicker({ apiKey: giphyApiKey, fetchImpl });
 
   app.get('/api/gif', requireAccess, async (req, res) => {

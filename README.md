@@ -68,6 +68,7 @@ project-root/
 └── public/
     ├── index.html          # Agile Pointing interface + access code form
     ├── styles.css          # Agile Pointing styles
+    ├── storage-version.js  # Clears data left by older versions of the site
     ├── access.js           # Access code check / submission
     ├── emoji-data.js       # Avatar emoji picker data
     ├── sounds.js           # WebAudio sound effects
@@ -95,6 +96,8 @@ project-root/
 
 The retro page redirects to `/?next=/retro.html?room=...` when access is missing and returns after the code is entered.
 
+Browsers whose stored `storageVersion` is missing or older than `STORAGE_VERSION` in `public/storage-version.js` have their localStorage, sessionStorage and cookies cleared and are signed out (`POST /logout`), so they start fresh. Bump `STORAGE_VERSION` when a change needs everyone to reset.
+
 ## HTTP Endpoints
 
 All of these except the access endpoints require the access cookie.
@@ -103,6 +106,7 @@ All of these except the access endpoints require the access cookie.
 |---|---|
 | `GET /access-status` | `{ valid }` for the current cookie |
 | `POST /validate-access` | `{ accessCode }` → sets the access cookie |
+| `POST /logout` | Clears the access cookie |
 | `GET /api/gif?mood=` | Random GIPHY URL for `celebrate`, `legendary`, `talk` or `coffee` (cached for an hour), or `null` |
 | `POST /api/retro-images?room=` | Raw PNG/JPEG/WebP/GIF body, up to 1 MB → `{ id }`; 60 images / 30 MB per room |
 | `GET /api/retro-images/:id` | The uploaded image |

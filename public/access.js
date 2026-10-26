@@ -27,7 +27,8 @@ function checkAccessCode() {
   // Clear the old client-side cookie from before access was enforced server-side
   document.cookie = 'accessCode=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
 
-  fetch('/access-status')
+  window.storageReset
+    .then(() => fetch('/access-status'))
     .then((response) => response.json())
     .then((data) => {
       if (data.valid) {

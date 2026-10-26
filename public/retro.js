@@ -15,7 +15,8 @@ function redirectToAccessForm() {
     window.location.href = `/?next=${encodeURIComponent(next)}`;
 }
 
-fetch('/access-status')
+window.storageReset
+    .then(() => fetch('/access-status'))
     .then(response => response.json())
     .then(data => data.valid ? socket.connect() : redirectToAccessForm())
     .catch(error => {
