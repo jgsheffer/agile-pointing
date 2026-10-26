@@ -238,7 +238,7 @@ Room IDs can use letters, numbers, spaces, `-` and `_` (up to 64 characters).
 4. Reveal votes when everyone has voted
 5. Talk through the results, then click "Next story"
 
-Custom avatars are cropped and resized to 128×128 in the browser. Animated GIFs are kept as-is and must be under 256 KB.
+Custom avatars are cropped and resized to 128×128 in the browser. Animated GIFs are kept as-is and must be under 1 MB.
 
 ### Retrospective
 1. Drag a sticky from the pad anywhere on the board (or use ➕ on a column), type, then Submit (Ctrl+Enter)

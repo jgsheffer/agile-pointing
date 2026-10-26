@@ -37,7 +37,7 @@ let renderedDeck = null;
 let roundHistory = [];
 
 const AVATAR_SIZE = 128;
-const MAX_GIF_SIZE = 256 * 1024; // GIFs are sent as-is to keep the animation
+const MAX_GIF_SIZE = 1024 * 1024; // GIFs are sent as-is to keep the animation
 
 // Used when GIPHY isn't configured or doesn't answer
 const letsTalkGifs = [
@@ -160,7 +160,7 @@ async function handleCustomAvatarUpload(event) {
 
     const isGif = file.type === 'image/gif';
     if (isGif && file.size > MAX_GIF_SIZE) {
-      alert('Animated GIFs must be smaller than 256 KB');
+      alert('Animated GIFs must be smaller than 1 MB');
       return;
     }
 

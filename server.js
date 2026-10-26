@@ -33,8 +33,8 @@ const MAX_BOARD_SIZE = 20000;
 const MIN_ITEM_WIDTH = 120;
 const MIN_ITEM_HEIGHT = 80;
 const MAX_ITEM_SIZE = 4000; // doodles drawn on the board can be wide
-const MAX_AVATAR_LENGTH = 360 * 1024; // ~256KB image once base64 encoded
-const MAX_SOCKET_MESSAGE = 512 * 1024;
+const MAX_AVATAR_LENGTH = 1400 * 1024; // ~1MB image once base64 encoded
+const MAX_SOCKET_MESSAGE = 1536 * 1024;
 
 const MAX_IMAGE_BYTES = 1024 * 1024; // 1MB per retro image
 const MAX_IMAGES_PER_ROOM = 60;

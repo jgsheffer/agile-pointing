@@ -337,6 +337,27 @@ describe('agile pointing', () => {
     assert.match(await error, /Invalid/);
   });
 
+  test('accepts GIF avatars up to 1 MB', async () => {
+    const gif = (bytes) =>
+      `data:image/gif;base64,${Buffer.alloc(bytes).toString('base64')}`;
+    const { state } = await joinPointing(instance.url, 'room-gif', 'Gina', {
+      avatar: gif(1024 * 1024),
+      avatarType: 'custom',
+    });
+    const gina = state.participants.find((p) => p.name === 'Gina');
+    assert.equal(gina.avatar.length, gif(1024 * 1024).length);
+
+    const socket = connect(instance.url);
+    const error = waitFor(socket, 'joinError');
+    socket.emit('joinRoom', {
+      room: 'room-gif',
+      name: 'Hank',
+      avatar: gif(1100 * 1024),
+      avatarType: 'custom',
+    });
+    assert.match(await error, /Invalid/);
+  });
+
   test('hides votes until they are revealed', async () => {
     const alice = await joinPointing(instance.url, 'room-b', 'Alice');
     const bob = await joinPointing(instance.url, 'room-b', 'Bob');
